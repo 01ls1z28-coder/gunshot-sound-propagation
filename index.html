@@ -93,6 +93,18 @@
     <p>
       Builds a noise map from starting SPL, environment (temperature, humidity, terrain),
       and wind — showing how gunshot sound levels fall off with distance across the field.
+      Propagation includes spherical spreading, terrain loss, ground reflection, and a
+      three-band (low/mid/high) weighted sum, plus an optional supersonic shockwave path.
+    </p>
+    <p class="footer-model">
+      <strong>How it works (Phase 1):</strong>
+      Wind uses a directional refraction-style factor
+      <code>factor = 1 + 0.03·v·cos(θ)</code> clamped to [0.7, 1.3], applied as
+      <code>ΔL = 20·log₁₀(factor)</code> — downwind (cos&gt;0) boosts, upwind (cos&lt;0) attenuates.
+      Atmospheric absorption follows <strong>ISO 9613-1:1993</strong> pure-tone attenuation
+      coefficient α (dB/m), Eq. (5), with oxygen/nitrogen relaxation frequencies frO / frN
+      and Annex B humidity (psat/pr); loss is A<sub>atm</sub> = α·d at each band center
+      frequency (Hz). Default air pressure is 1 atm (101.325 kPa).
     </p>
     <p class="footer-osha">
       <strong>OSHA reference (29 CFR 1910.95):</strong>

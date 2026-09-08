@@ -1,6 +1,15 @@
 /**
- * Acoustics — faithful port of Acoustics.cs from GunshotSoundPropagationSimulator.
- * Do not change the physics without updating the C# source of truth.
+ * Acoustics — Phase 1 accuracy upgrade of the Gunshot Sound Propagation web port.
+ *
+ * Deviations from the original desktop C# port (Phase 1):
+ *   - Wind: directional refraction-style factor
+ *     factor = 1 + 0.03·v·cos(relAngle), clamped [0.7, 1.3]; ΔL = 20·log10(factor).
+ *     Downwind (cos>0) boosts; upwind (cos<0) attenuates (fixes prior upwind boost bug).
+ *   - Atmospheric absorption: ISO 9613-1:1993 pure-tone attenuation coefficient α (dB/m),
+ *     Eq. (5) with frO / frN and Annex B humidity (psat/pr). Default pa = pr = 101.325 kPa.
+ *
+ * Spherical spreading, terrain, ground reflection, band weights, and shockwave pipeline
+ * remain as in the desktop-derived port.
  */
 (function (global) {
   'use strict';
@@ -21,27 +30,63 @@
     return sourceSPL_dB - delta;
   }
 
+  /**
+   * ISO 9613-1:1993 atmospheric absorption — pure-tone α (dB/m), Eq. (5).
+   * A_atm = α · d. Frequency f in Hz. Default pressure pa = pr = 101.325 kPa (1 atm).
+   *
+   * Table 1 style checks (dB/km = α·1000), console-only:
+   *   20 °C, 50 % RH, 1000 Hz → ~4.66 dB/km
+   *   10 °C, 70 % RH, 1000 Hz → ~3.66 dB/km
+   */
+  function iso9613Alpha_dB_per_m(tempC, humidityPct, frequencyHz, pa_kPa) {
+    var T0 = 293.15; // K
+    var pr = 101.325; // kPa
+    var pa = pa_kPa == null ? pr : pa_kPa;
+    var T = tempC + 273.15;
+    var f = frequencyHz;
+
+    // Annex B: saturation vapour pressure ratio psat/pr
+    var psat_pr = Math.pow(10.0, -6.8346 * Math.pow(273.16 / T, 1.261) + 4.6151);
+    // Molar concentration of water vapour (%)
+    var h = humidityPct * (psat_pr) / (pa / pr);
+
+    var frO =
+      (pa / pr) * (24.0 + 4.04e4 * h * (0.02 + h) / (0.391 + h));
+    var frN =
+      (pa / pr) *
+      Math.pow(T / T0, -0.5) *
+      (9.0 + 280.0 * h * Math.exp(-4.170 * (Math.pow(T / T0, -1.0 / 3.0) - 1.0)));
+
+    var alpha =
+      8.686 *
+      f *
+      f *
+      (1.84e-11 * (pr / pa) * Math.sqrt(T / T0) +
+        Math.pow(T / T0, -2.5) *
+          (0.01275 * Math.exp(-2239.1 / T) / (frO + (f * f) / frO) +
+            0.1068 * Math.exp(-3352.0 / T) / (frN + (f * f) / frN)));
+
+    return alpha;
+  }
+
   function AtmosphericAbsorption(spl_dB, distance_m, tempC, humidityPct, frequencyHz) {
-    var h = humidityPct / 100.0; // retained for parity with C# (unused in alpha)
-
-    var alphaBase;
-    if (frequencyHz < 300) {
-      alphaBase = 0.0001;
-    } else if (frequencyHz < 1500) {
-      alphaBase = 0.0003;
-    } else {
-      alphaBase = 0.0010;
-    }
-
-    var tempFactor = 1.0 + 0.01 * (tempC - 20.0);
-    tempFactor = Math.max(0.8, Math.min(1.2, tempFactor));
-
-    var humidityFactor = 1.0 + 0.01 * (humidityPct - 50.0);
-    humidityFactor = Math.max(0.7, Math.min(1.3, humidityFactor));
-
-    var alpha = alphaBase * tempFactor * humidityFactor;
-    var loss = alpha * distance_m;
+    var alpha = iso9613Alpha_dB_per_m(tempC, humidityPct, frequencyHz, null);
+    var loss = alpha * distance_m; // A_atm = α · d
     return spl_dB - loss;
+  }
+
+  // Optional ISO Table 1 self-check (console-only; skipped in production pages without console)
+  if (typeof console !== 'undefined' && console.assert) {
+    var a20 = iso9613Alpha_dB_per_m(20, 50, 1000, null) * 1000;
+    var a10 = iso9613Alpha_dB_per_m(10, 70, 1000, null) * 1000;
+    console.assert(
+      Math.abs(a20 - 4.66) < 0.15,
+      'ISO 9613-1 check: 20C/50%/1kHz expected ~4.66 dB/km, got ' + a20.toFixed(3)
+    );
+    console.assert(
+      Math.abs(a10 - 3.66) < 0.15,
+      'ISO 9613-1 check: 10C/70%/1kHz expected ~3.66 dB/km, got ' + a10.toFixed(3)
+    );
   }
 
   function TerrainLoss(spl_dB, distance_m, terrain) {
@@ -103,6 +148,11 @@
     return shockSPL;
   }
 
+  /**
+   * Directional wind refraction-style factor.
+   * factor = 1 + 0.03·v·cos(relAngle), clamped [0.7, 1.3]; ΔL = 20·log10(factor).
+   * cos>0 (downwind) boosts; cos<0 (upwind) attenuates.
+   */
   function ApplyWind(spl_dB, distance_m, windSpeed_mps, windDirRad, rayAngleRad) {
     if (windSpeed_mps <= 0.01) {
       return spl_dB;
@@ -111,17 +161,15 @@
     var relAngle = rayAngleRad - windDirRad;
     var cos = Math.cos(relAngle);
 
-    var downwindFactor = 1.0 + 0.03 * windSpeed_mps * cos;
-    var upwindFactor = 1.0 - 0.03 * windSpeed_mps * cos;
-
-    var factor = cos >= 0 ? downwindFactor : upwindFactor;
+    var factor = 1.0 + 0.03 * windSpeed_mps * cos;
     factor = Math.max(0.7, Math.min(1.3, factor));
 
     return spl_dB + 20.0 * Math.log10(factor);
   }
 
   /**
-   * Propagate — same signature and pipeline as Acoustics.Propagate in Acoustics.cs
+   * Propagate — same signature and band/shockwave pipeline as Acoustics.Propagate,
+   * with Phase 1 wind + ISO 9613-1 absorption.
    */
   function Propagate(
     muzzleSPL,
@@ -177,6 +225,9 @@
   global.Acoustics = {
     ApplySuppressor: ApplySuppressor,
     SphericalSpreading: SphericalSpreading,
-    Propagate: Propagate
+    Propagate: Propagate,
+    // Exposed for validation / debugging
+    _iso9613Alpha_dB_per_m: iso9613Alpha_dB_per_m,
+    _ApplyWind: ApplyWind
   };
 })(typeof window !== 'undefined' ? window : globalThis);
