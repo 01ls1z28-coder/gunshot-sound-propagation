@@ -17,13 +17,18 @@
     <aside class="panel controls" aria-label="Simulation controls">
       <h2>Acoustic Propagation Sim</h2>
 
+      <div class="units-toggle" role="group" aria-label="Unit system">
+        <button type="button" class="units-btn is-active" id="btnMetric" aria-pressed="true">Metric</button>
+        <button type="button" class="units-btn" id="btnImperial" aria-pressed="false">Imperial</button>
+      </div>
+
       <div class="field">
         <label for="startingSPL">Starting SPL (dB @ 1m)</label>
         <input id="startingSPL" type="number" inputmode="decimal" value="165" step="1" min="80" max="200" />
       </div>
 
       <div class="field">
-        <label for="maxDistance">Max Distance (m)</label>
+        <label for="maxDistance" id="labelMaxDistance">Max Distance (m)</label>
         <input id="maxDistance" type="number" inputmode="decimal" value="1000" step="10" min="10" max="5000" />
       </div>
 
@@ -31,7 +36,7 @@
 
       <div class="row-2">
         <div class="field">
-          <label for="tempC">Temp (°C)</label>
+          <label for="tempC" id="labelTemp">Temp (°C)</label>
           <input id="tempC" type="number" inputmode="decimal" value="20" step="1" />
         </div>
         <div class="field">
@@ -54,7 +59,7 @@
 
       <div class="row-2">
         <div class="field">
-          <label for="windSpeed">Speed (m/s)</label>
+          <label for="windSpeed" id="labelWindSpeed">Speed (m/s)</label>
           <input id="windSpeed" type="number" inputmode="decimal" value="0" step="0.5" min="0" />
         </div>
         <div class="field">
@@ -64,7 +69,14 @@
       </div>
 
       <button type="button" class="btn btn-primary" id="btnGenerate">Generate Noise Map</button>
-      <button type="button" class="btn btn-secondary" id="btnLegend">Show Legend</button>
+
+      <div class="inline-legend" aria-label="SPL color legend">
+        <p class="legend-heading">SPL Color Legend</p>
+        <div class="legend-row"><span class="swatch swatch-high"></span> High SPL (≈180 dB)</div>
+        <div class="legend-row"><span class="swatch swatch-med"></span> Medium SPL (≈120 dB)</div>
+        <div class="legend-row"><span class="swatch swatch-low"></span> Lower SPL (≈80 dB)</div>
+        <div class="legend-row"><span class="swatch swatch-vlow"></span> Very Low SPL (≈60 dB)</div>
+      </div>
 
       <p class="grid-info" id="gridInfo" aria-live="polite"></p>
     </aside>
@@ -79,28 +91,14 @@
 
   <footer class="site-footer">
     <p>
-      <strong>Sources / credits:</strong>
-      Physics ported from the desktop WPF <code>Acoustics.cs</code> (spherical spreading,
-      band-weighted atmospheric absorption, terrain loss, ground reflection, wind).
-      UI controls mirror <code>MainWindow.xaml</code>. Color legend adapted from
-      <code>LegendWindow.xaml</code>. Created by Jorge Guerra. Static GitHub Pages build by Sati.
+      Builds a noise map from starting SPL, environment (temperature, humidity, terrain),
+      and wind — showing how gunshot sound levels fall off with distance across the field.
     </p>
     <p class="disclaimer">
       Disclaimer: values are compiled engineering estimates for visualization and education —
       not laboratory-certified hearing-protection or regulatory measurements.
     </p>
   </footer>
-
-  <div class="modal" id="legendModal" hidden role="dialog" aria-labelledby="legendTitle" aria-modal="true">
-    <div class="modal-card">
-      <h3 id="legendTitle">SPL Color Legend</h3>
-      <div class="legend-row"><span class="swatch swatch-high"></span> High SPL (≈180 dB)</div>
-      <div class="legend-row"><span class="swatch swatch-med"></span> Medium SPL (≈120 dB)</div>
-      <div class="legend-row"><span class="swatch swatch-low"></span> Lower SPL (≈80 dB)</div>
-      <div class="legend-row"><span class="swatch swatch-vlow"></span> Very Low SPL (≈60 dB)</div>
-      <button type="button" class="btn btn-secondary" id="btnCloseLegend">Close</button>
-    </div>
-  </div>
 
   <script src="js/acoustics.js"></script>
   <script src="js/app.js"></script>
