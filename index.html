@@ -1,0 +1,108 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="utf-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1" />
+  <meta name="description" content="Acoustic noise-map simulator — spherical spreading, atmospheric absorption, terrain, wind, and ground reflection." />
+  <title>Gunshot Sound Propagation Simulator</title>
+  <link rel="stylesheet" href="css/style.css" />
+</head>
+<body>
+  <header class="site-header">
+    <h1><span>GSP</span> Sound Propagation Simulator</h1>
+    <p class="credit">Created by <strong>Jorge Guerra</strong></p>
+  </header>
+
+  <main class="layout">
+    <aside class="panel controls" aria-label="Simulation controls">
+      <h2>Acoustic Propagation Sim</h2>
+
+      <div class="field">
+        <label for="startingSPL">Starting SPL (dB @ 1m)</label>
+        <input id="startingSPL" type="number" inputmode="decimal" value="165" step="1" min="80" max="200" />
+      </div>
+
+      <div class="field">
+        <label for="maxDistance">Max Distance (m)</label>
+        <input id="maxDistance" type="number" inputmode="decimal" value="1000" step="10" min="10" max="5000" />
+      </div>
+
+      <p class="section-label">Environment</p>
+
+      <div class="row-2">
+        <div class="field">
+          <label for="tempC">Temp (°C)</label>
+          <input id="tempC" type="number" inputmode="decimal" value="20" step="1" />
+        </div>
+        <div class="field">
+          <label for="humidity">Humidity (%)</label>
+          <input id="humidity" type="number" inputmode="decimal" value="50" step="1" min="0" max="100" />
+        </div>
+      </div>
+
+      <div class="field">
+        <label for="terrain">Terrain</label>
+        <select id="terrain">
+          <option value="Open Field" selected>Open Field</option>
+          <option value="Forest">Forest</option>
+          <option value="Urban">Urban</option>
+          <option value="Indoor">Indoor</option>
+        </select>
+      </div>
+
+      <p class="section-label">Wind</p>
+
+      <div class="row-2">
+        <div class="field">
+          <label for="windSpeed">Speed (m/s)</label>
+          <input id="windSpeed" type="number" inputmode="decimal" value="0" step="0.5" min="0" />
+        </div>
+        <div class="field">
+          <label for="windDir">Direction (°)</label>
+          <input id="windDir" type="number" inputmode="decimal" value="0" step="1" />
+        </div>
+      </div>
+
+      <button type="button" class="btn btn-primary" id="btnGenerate">Generate Noise Map</button>
+      <button type="button" class="btn btn-secondary" id="btnLegend">Show Legend</button>
+
+      <p class="grid-info" id="gridInfo" aria-live="polite"></p>
+    </aside>
+
+    <section class="panel map-panel" aria-label="Noise map">
+      <div class="readout" id="cursorReadout">SPL: --- dB   Dist: --- m</div>
+      <div class="map-wrap">
+        <canvas id="noiseMap" width="512" height="512" role="img" aria-label="SPL heatmap"></canvas>
+      </div>
+    </section>
+  </main>
+
+  <footer class="site-footer">
+    <p>
+      <strong>Sources / credits:</strong>
+      Physics ported from the desktop WPF <code>Acoustics.cs</code> (spherical spreading,
+      band-weighted atmospheric absorption, terrain loss, ground reflection, wind).
+      UI controls mirror <code>MainWindow.xaml</code>. Color legend adapted from
+      <code>LegendWindow.xaml</code>. Created by Jorge Guerra. Static GitHub Pages build by Sati.
+    </p>
+    <p class="disclaimer">
+      Disclaimer: values are compiled engineering estimates for visualization and education —
+      not laboratory-certified hearing-protection or regulatory measurements.
+    </p>
+  </footer>
+
+  <div class="modal" id="legendModal" hidden role="dialog" aria-labelledby="legendTitle" aria-modal="true">
+    <div class="modal-card">
+      <h3 id="legendTitle">SPL Color Legend</h3>
+      <div class="legend-row"><span class="swatch swatch-high"></span> High SPL (≈180 dB)</div>
+      <div class="legend-row"><span class="swatch swatch-med"></span> Medium SPL (≈120 dB)</div>
+      <div class="legend-row"><span class="swatch swatch-low"></span> Lower SPL (≈80 dB)</div>
+      <div class="legend-row"><span class="swatch swatch-vlow"></span> Very Low SPL (≈60 dB)</div>
+      <button type="button" class="btn btn-secondary" id="btnCloseLegend">Close</button>
+    </div>
+  </div>
+
+  <script src="js/acoustics.js"></script>
+  <script src="js/app.js"></script>
+</body>
+</html>
