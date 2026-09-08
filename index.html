@@ -22,9 +22,52 @@
         <button type="button" class="units-btn" id="btnImperial" aria-pressed="false">Imperial</button>
       </div>
 
+      <p class="section-label">Gun / suppressor profiles</p>
+
       <div class="field">
-        <label for="startingSPL">Starting SPL (dB @ 1m)</label>
-        <input id="startingSPL" type="number" inputmode="decimal" value="165" step="1" min="80" max="200" />
+        <label for="caliberFilter">Host / caliber</label>
+        <select id="caliberFilter"></select>
+      </div>
+
+      <div class="field">
+        <label for="suppressorSearch">Search suppressors</label>
+        <input id="suppressorSearch" type="search" placeholder="Manufacturer or model…" autocomplete="off" />
+      </div>
+
+      <div class="field">
+        <label for="suppressorList">Suppressors <span class="hint" id="suppressorCount"></span></label>
+        <div class="list-wrap" id="suppressorListWrap">
+          <ul class="profile-list" id="suppressorList" role="listbox" aria-label="Measured suppressors"></ul>
+        </div>
+        <p class="field-note" id="suppressorPickNote">Pick a measured suppressor to set suppressed SPL = ml_dba (@ ~1 m).</p>
+      </div>
+
+      <div class="field">
+        <label for="bareHost">Gun (bare / unsuppressed host)</label>
+        <select id="bareHost"></select>
+      </div>
+
+      <div class="field">
+        <label for="startingSPL">Starting SPL (dB @ 1m) — bare / manual override</label>
+        <input id="startingSPL" type="number" inputmode="decimal" value="165" step="0.1" min="80" max="200" />
+        <p class="field-note">Custom when “Custom / manual” is selected; cited Bare Muzzle rows fill this from Summit/SDC measurements.</p>
+      </div>
+
+      <div class="map-source-toggle" role="group" aria-label="Noise map source level">
+        <button type="button" class="units-btn is-active" id="btnMapBare" aria-pressed="true">Map: Bare</button>
+        <button type="button" class="units-btn" id="btnMapSuppressed" aria-pressed="false">Map: Suppressed</button>
+      </div>
+
+      <div class="compare-summary" id="compareSummary" aria-live="polite">
+        <p class="legend-heading">Bare vs suppressed @ 1 m</p>
+        <div class="compare-grid">
+          <div><span class="cmp-label">Bare</span> <strong id="cmpBareSpl">—</strong></div>
+          <div><span class="cmp-label">Suppressed</span> <strong id="cmpSuppSpl">—</strong></div>
+          <div><span class="cmp-label">Δ (bare − supp)</span> <strong id="cmpDelta">—</strong></div>
+        </div>
+        <p class="field-note" id="cmpPathNote">
+          Suppressed path uses measured <code>ml_dba</code> directly (<code>Propagate(ml_dba, …)</code>).
+        </p>
       </div>
 
       <div class="field">
@@ -71,16 +114,23 @@
       <button type="button" class="btn btn-primary" id="btnGenerate">Generate Noise Map</button>
 
       <div class="osha-distances" aria-label="Distance to OSHA levels">
-        <p class="legend-heading">Distance to OSHA levels</p>
+        <p class="legend-heading">Distance to OSHA levels — Bare | Suppressed</p>
         <p class="osha-table-note" id="oshaTableNote">
-          Continuous field SPL along downwind / upwind / crosswind rays.
-          Map values are an engineering broadband estimate — not certified L<sub>peak</sub> / L<sub>Aeq</sub>.
+          Continuous field SPL along downwind / upwind / crosswind rays for both bare and suppressed source levels.
+          Map uses the selected Map: Bare / Map: Suppressed source. Engineering broadband estimate — not certified L<sub>peak</sub> / L<sub>Aeq</sub>.
         </p>
         <div class="osha-table-wrap">
-          <table class="osha-table" id="oshaDistanceTable">
+          <table class="osha-table osha-table-compare" id="oshaDistanceTable">
             <thead>
               <tr>
-                <th scope="col">Level</th>
+                <th scope="col" rowspan="2">Level</th>
+                <th scope="colgroup" colspan="3">Bare</th>
+                <th scope="colgroup" colspan="3">Suppressed</th>
+              </tr>
+              <tr>
+                <th scope="col">Down</th>
+                <th scope="col">Up</th>
+                <th scope="col">Cross</th>
                 <th scope="col">Down</th>
                 <th scope="col">Up</th>
                 <th scope="col">Cross</th>
@@ -164,12 +214,28 @@
       limits are shown for reference only. Peak-style readout and the 140 dB row are
       engineering estimates, not certified L<sub>peak</sub>.
     </p>
+    <p class="footer-phase3">
+      <strong>Phase 3 — gun / suppressor profiles &amp; bare vs suppressed:</strong>
+      Baked <code>js/profiles-data.js</code> reuses Sound Distance Calculator
+      <code>suppressors-data.js</code> (Thunder Beast Arms Silencer Summit ML dBA @ ~1 m;
+      also SDC credits for public advertised specs and Mrgunandgear measurements).
+      <em>Suppressed</em> source level is the selected row’s measured <code>ml_dba</code>
+      via <code>Propagate(ml_dba, …)</code> — not an invented reduction.
+      <em>Bare</em> uses Custom / manual Starting SPL or a cited <strong>Bare Muzzle</strong>
+      host row from the same bake. When both are set, Δ = bare − ml_dba is shown for
+      comparison; <code>ApplySuppressor(bare, reduction)</code> is available only for that
+      measured-pair Δ (map/compare still prefer direct ml_dba for suppressed).
+      Estimates labeled; not lab-certified hearing-safety ratings.
+    </p>
     <p class="disclaimer">
       Disclaimer: values are compiled engineering estimates for visualization and education —
       not laboratory-certified hearing-protection or regulatory measurements.
+      Measurement setups, hosts, ammo, and conditions differ; do not treat displayed SPL as a
+      guarantee of hearing protection.
     </p>
   </footer>
 
+  <script src="js/profiles-data.js"></script>
   <script src="js/acoustics.js"></script>
   <script src="js/app.js"></script>
 </body>

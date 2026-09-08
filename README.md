@@ -45,7 +45,12 @@ Documented in the UI status line under the buttons (`js/app.js`).
 - Wind factor
 - Supersonic shockwave path present (desktop UI passes `isSupersonic = false`)
 
-GunProfile / SuppressorProfile exist in the WPF tree but were not wired in MainWindow — not wired here either.
+Phase 3 wires baked gun / suppressor profiles from the Sound Distance Calculator
+`suppressors-data.js` bake (Thunder Beast Arms Silencer Summit / SDC credits) in
+`js/profiles-data.js` — no invented dB, no fetch/DB. Bare muzzle uses cited
+Bare Muzzle rows or Custom Starting SPL; suppressed uses
+`ApplySuppressor(muzzle, reduction_dB)` before `Propagate` when reduction is a
+measured pair (`bare_ref − ml_dba`), else `Propagate(ml_dba)`.
 
 ## Disclaimer
 

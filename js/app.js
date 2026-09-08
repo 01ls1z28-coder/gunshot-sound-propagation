@@ -5,6 +5,11 @@
  *
  * Phase 2: continuous + peak-style cursor readout; live distance-to-OSHA table
  * (downwind / upwind / crosswind); OSHA 140 dB peak impulsive row.
+ *
+ * Phase 3: baked gun / suppressor profiles (GSP_PROFILES); bare vs suppressed
+ * compare on map source toggle + dual OSHA columns. Suppressed path prefers
+ * ApplySuppressor(muzzle, reduction_dB) when reduction is a measured pair;
+ * otherwise Propagate(ml_dba) for measured suppressed level.
  */
 (function () {
   'use strict';
@@ -37,6 +42,18 @@
   var M_PER_FT = 0.3048;
   var MPS_PER_MPH = 0.44704;
 
+  var profiles = (typeof GSP_PROFILES !== 'undefined' && GSP_PROFILES) ? GSP_PROFILES : null;
+  var hostBare = profiles && Array.isArray(profiles.HOST_BARE_PROFILES) ? profiles.HOST_BARE_PROFILES : [];
+  var suppressors = profiles && Array.isArray(profiles.SUPPRESSOR_PROFILES) ? profiles.SUPPRESSOR_PROFILES : [];
+  var caliberList = profiles && Array.isArray(profiles.CALIBERS)
+    ? profiles.CALIBERS.slice()
+    : uniqueSorted(suppressors.map(function (s) { return s.caliber; }));
+
+  var selectedSuppressorId = null;
+  var selectedBareId = 'custom';
+  /** @type {'bare'|'suppressed'} */
+  var mapSource = 'bare';
+
   var lastGrid = null;
   var cellSize_m = 1.0;
   var lastMaxDistance = 1000;
@@ -46,12 +63,37 @@
   /** Last SI inputs used for map / distance table (for hover peak recompute). */
   var lastInputs = null;
   var distanceUpdateTimer = null;
+  var listFilterTimer = null;
 
   var canvas = document.getElementById('noiseMap');
   var ctx = canvas.getContext('2d');
   var cursorReadout = document.getElementById('cursorReadout');
   var gridInfo = document.getElementById('gridInfo');
   var oshaDistanceBody = document.getElementById('oshaDistanceBody');
+
+  function uniqueSorted(arr) {
+    var seen = Object.create(null);
+    var out = [];
+    for (var i = 0; i < arr.length; i++) {
+      var v = arr[i];
+      if (v == null || seen[v]) continue;
+      seen[v] = 1;
+      out.push(v);
+    }
+    out.sort(function (a, b) { return String(a).localeCompare(String(b)); });
+    return out;
+  }
+
+  function hostKey(caliber) {
+    return String(caliber || '')
+      .replace(/\s+TBS20\d{2}\b/g, ' TBS')
+      .replace(/\s+Online Marketing Data\b/gi, '')
+      .replace(/\s+Mrgunsngear\b/gi, '')
+      .replace(/\s+MGAG\b/gi, '')
+      .replace(/\s+/g, ' ')
+      .trim()
+      .toLowerCase();
+  }
 
   function parseOrDefault(text, fallback) {
     var value = parseFloat(String(text).replace(',', '.'));
@@ -70,13 +112,82 @@
   }
 
   function formatDistCell(result) {
-    if (!result || result.status === 'outside_map') {
+    if (!result) {
+      return '<span class="na">—</span>';
+    }
+    if (result.status === 'outside_map') {
       return '<span class="beyond">beyond max distance</span>';
     }
-    if (result.status === 'below_near') {
-      return formatDist(result.distance_m);
-    }
     return formatDist(result.distance_m);
+  }
+
+  function formatDb(v) {
+    if (v == null || !isFinite(v)) return '—';
+    return Number(v).toFixed(1) + ' dB';
+  }
+
+  function findBareById(id) {
+    for (var i = 0; i < hostBare.length; i++) {
+      if (hostBare[i].id === id) return hostBare[i];
+    }
+    return null;
+  }
+
+  function findSuppressorById(id) {
+    for (var i = 0; i < suppressors.length; i++) {
+      if (suppressors[i].id === id) return suppressors[i];
+    }
+    return null;
+  }
+
+  /**
+   * Resolve bare muzzle SPL + suppressed SPL.
+   * - Bare: cited gun (Bare Muzzle) or manual Starting SPL.
+   * - Suppressed: ApplySuppressor(muzzle, reduction_dB) when reduction is a
+   *   measured pair (baked bare_ref − ml_dba); else measured ml_dba directly.
+   */
+  function resolveSourceLevels() {
+    var bareEl = document.getElementById('startingSPL');
+    var manualBare = parseOrDefault(bareEl && bareEl.value, 165);
+    var gun = selectedBareId !== 'custom' ? findBareById(selectedBareId) : null;
+    var bareSPL = gun && gun.muzzle_spl_dB != null ? Number(gun.muzzle_spl_dB) : manualBare;
+    var bareSource = gun
+      ? ('Cited gun: ' + gun.name + ' (' + gun.muzzle_spl_dB + ' dBA) — ' + (gun.source_note || ''))
+      : 'Custom / manual Starting SPL (user override)';
+
+    var sup = selectedSuppressorId ? findSuppressorById(selectedSuppressorId) : null;
+    var suppressedSPL = null;
+    var suppressedPath = 'No suppressor selected';
+    var reduction_dB = null;
+    var sourceNote = '';
+
+    if (sup) {
+      sourceNote = (sup.source_note || '') + (sup.reduction_note ? ' ' + sup.reduction_note : '');
+      if (sup.reduction_dB != null && isFinite(sup.reduction_dB)) {
+        reduction_dB = Number(sup.reduction_dB);
+        suppressedSPL = Acoustics.ApplySuppressor(bareSPL, reduction_dB);
+        suppressedPath =
+          'ApplySuppressor(muzzle ' + bareSPL.toFixed(2) + ', reduction ' +
+          reduction_dB.toFixed(2) + ') → ' + suppressedSPL.toFixed(2) +
+          ' (measured-pair reduction; ml_dba=' + Number(sup.ml_dba).toFixed(2) + ')';
+      } else if (sup.ml_dba != null && isFinite(sup.ml_dba)) {
+        suppressedSPL = Number(sup.ml_dba);
+        reduction_dB = bareSPL - suppressedSPL;
+        suppressedPath =
+          'Propagate(ml_dba=' + suppressedSPL.toFixed(2) + ') — no baked bare_ref for this host; Δ vs bare shown only';
+      }
+    }
+
+    return {
+      bareSPL: bareSPL,
+      suppressedSPL: suppressedSPL,
+      reduction_dB: reduction_dB,
+      bareSource: bareSource,
+      suppressedPath: suppressedPath,
+      sourceNote: sourceNote,
+      gun: gun,
+      suppressor: sup
+    };
   }
 
   function mapSPLToColor(spl) {
@@ -90,15 +201,10 @@
     return [r, g, b];
   }
 
-  /**
-   * Domain matches desktop: diameter = 2 * maxDistance meters, source at center.
-   * Cell size scales up when that would exceed MAX_CELLS_PER_AXIS.
-   */
   function resolveGrid(maxDistance) {
     var domainM = maxDistance * 2;
-    var idealCells = Math.max(2, Math.floor(domainM)); // 1 m cells like desktop
+    var idealCells = Math.max(2, Math.floor(domainM));
     var gridSize = Math.min(idealCells, MAX_CELLS_PER_AXIS);
-    // Prefer even size so center is clean
     if (gridSize % 2 !== 0) gridSize -= 1;
     if (gridSize < 2) gridSize = 2;
     var cs = domainM / gridSize;
@@ -122,7 +228,6 @@
         var distance_m = Math.sqrt(dx * dx + dy * dy);
         if (distance_m < 1.0) distance_m = 1.0;
         var angleRad = Math.atan2(dy, dx);
-        // Desktop MainWindow hardcodes isSupersonic = false
         var spl = Acoustics.Propagate(
           startingSPL, distance_m, tempC, humidityPct,
           terrain, false, windSpeed, windDirRad, angleRad
@@ -135,16 +240,17 @@
       var cellLabel = units === 'metric'
         ? cellSize_m.toFixed(2) + ' m'
         : (cellSize_m / M_PER_FT).toFixed(2) + ' ft';
+      var srcTag = mapSource === 'suppressed' ? 'map=suppressed' : 'map=bare';
       gridInfo.textContent =
         'Grid: ' + gridSize + '×' + gridSize +
         ' · cell ≈ ' + cellLabel +
         ' · cap ' + MAX_CELLS_PER_AXIS + ' / axis' +
+        ' · ' + srcTag +
         ' · map = engineering broadband (not certified Lpeak/LAeq)';
     }
 
     return { data: grid, size: gridSize };
   }
-
 
   function roundRectPath(c, x, y, w, h, r) {
     var radius = Math.min(r, w / 2, h / 2);
@@ -390,12 +496,34 @@
     ctx.fill();
   }
 
-  /** Read UI fields and convert to SI for acoustics. */
-  function readInputsAsSI() {
-    var startingSPL = parseOrDefault(document.getElementById('startingSPL').value, 165.0);
+  function updateCompareSummary(levels) {
+    var bareEl = document.getElementById('cmpBareSpl');
+    var suppEl = document.getElementById('cmpSuppSpl');
+    var deltaEl = document.getElementById('cmpDelta');
+    var noteEl = document.getElementById('cmpPathNote');
+    if (!bareEl) return;
+
+    bareEl.textContent = formatDb(levels.bareSPL);
+    suppEl.textContent = levels.suppressedSPL == null ? '— (pick suppressor)' : formatDb(levels.suppressedSPL);
+    if (levels.suppressedSPL != null && isFinite(levels.bareSPL)) {
+      var d = levels.bareSPL - levels.suppressedSPL;
+      deltaEl.textContent = d.toFixed(1) + ' dB' +
+        (levels.suppressor && levels.suppressor.reduction_dB != null ? ' (baked measured-pair reduction)' : ' (runtime Δ)');
+    } else {
+      deltaEl.textContent = '—';
+    }
+    if (noteEl) {
+      noteEl.innerHTML =
+        '<strong>Bare:</strong> ' + levels.bareSource +
+        '<br><strong>Suppressed path:</strong> ' + levels.suppressedPath +
+        (levels.sourceNote ? '<br><span class="hint">' + levels.sourceNote + '</span>' : '');
+    }
+  }
+
+  function envFromForm() {
     var maxDistRaw = parseOrDefault(document.getElementById('maxDistance').value, units === 'metric' ? 1000 : 3281);
     var tempRaw = parseOrDefault(document.getElementById('tempC').value, units === 'metric' ? 20 : 68);
-    var humidityPct = parseOrDefault(document.getElementById('humidity').value, 50.0);
+    var humidityPct = parseOrDefault(document.getElementById('humidity').value, 50);
     var terrain = document.getElementById('terrain').value || 'Open Field';
     var windRaw = parseOrDefault(document.getElementById('windSpeed').value, 0.0);
     var windDirDeg = parseOrDefault(document.getElementById('windDir').value, 0.0);
@@ -418,7 +546,6 @@
     if (maxDistance_m > 5000) maxDistance_m = 5000;
 
     return {
-      startingSPL: startingSPL,
       maxDistance_m: maxDistance_m,
       tempC: tempC,
       humidityPct: humidityPct,
@@ -428,34 +555,59 @@
     };
   }
 
-  /**
-   * Binary-search distance for one OSHA level along one ray.
-   * Continuous levels use Acoustics.DistanceToLevel (Propagate).
-   * Peak 140 uses the same bisection on PropagateWithPeak(...).peak.
-   */
-  function searchDistance(targetDb, rayAngleRad, inp, usePeak) {
+  function readInputsAsSI() {
+    var levels = resolveSourceLevels();
+    var env = envFromForm();
+    var mapSPL = mapSource === 'suppressed' && levels.suppressedSPL != null
+      ? levels.suppressedSPL
+      : levels.bareSPL;
+
+    // If user asked for suppressed map but no suppressor, fall back to bare
+    if (mapSource === 'suppressed' && levels.suppressedSPL == null) {
+      mapSPL = levels.bareSPL;
+    }
+
+    return {
+      startingSPL: mapSPL,
+      bareSPL: levels.bareSPL,
+      suppressedSPL: levels.suppressedSPL,
+      reduction_dB: levels.reduction_dB,
+      levels: levels,
+      maxDistance_m: env.maxDistance_m,
+      tempC: env.tempC,
+      humidityPct: env.humidityPct,
+      terrain: env.terrain,
+      windSpeed_mps: env.windSpeed_mps,
+      windDirRad: env.windDirRad
+    };
+  }
+
+  function searchDistance(targetDb, rayAngleRad, muzzleSPL, env, usePeak) {
+    if (muzzleSPL == null || !isFinite(muzzleSPL)) {
+      return null;
+    }
     if (!usePeak) {
       return Acoustics.DistanceToLevel(
         targetDb,
-        inp.maxDistance_m,
-        inp.startingSPL,
-        inp.tempC,
-        inp.humidityPct,
-        inp.terrain,
+        env.maxDistance_m,
+        muzzleSPL,
+        env.tempC,
+        env.humidityPct,
+        env.terrain,
         false,
-        inp.windSpeed_mps,
-        inp.windDirRad,
+        env.windSpeed_mps,
+        env.windDirRad,
         rayAngleRad
       );
     }
 
     var dMin = 1.0;
-    var dMax = Math.max(dMin, inp.maxDistance_m);
+    var dMax = Math.max(dMin, env.maxDistance_m);
 
     function peakAt(d) {
       return Acoustics.PropagateWithPeak(
-        inp.startingSPL, d, inp.tempC, inp.humidityPct, inp.terrain,
-        false, inp.windSpeed_mps, inp.windDirRad, rayAngleRad
+        muzzleSPL, d, env.tempC, env.humidityPct, env.terrain,
+        false, env.windSpeed_mps, env.windDirRad, rayAngleRad
       ).peak;
     }
 
@@ -476,9 +628,11 @@
     return { distance_m: 0.5 * (lo + hi), status: 'ok' };
   }
 
-  /** Live distance-to-OSHA table: downwind / upwind / crosswind. */
+  /** Live distance-to-OSHA table: Bare | Suppressed × down / up / cross. */
   function updateOshaDistanceTable(inp) {
     if (!oshaDistanceBody || !inp) return;
+
+    updateCompareSummary(inp.levels || resolveSourceLevels());
 
     var windDir = inp.windDirRad;
     var rays = {
@@ -487,22 +641,37 @@
       cross: windDir + Math.PI / 2
     };
 
+    var env = {
+      maxDistance_m: inp.maxDistance_m,
+      tempC: inp.tempC,
+      humidityPct: inp.humidityPct,
+      terrain: inp.terrain,
+      windSpeed_mps: inp.windSpeed_mps,
+      windDirRad: inp.windDirRad
+    };
+
     var rows = OSHA_LINES.concat([OSHA_PEAK_LINE]);
     var html = '';
 
     for (var i = 0; i < rows.length; i++) {
       var row = rows[i];
       var usePeak = !!row.peakSearch;
-      var dDown = searchDistance(row.db, rays.down, inp, usePeak);
-      var dUp = searchDistance(row.db, rays.up, inp, usePeak);
-      var dCross = searchDistance(row.db, rays.cross, inp, usePeak);
+      var bDown = searchDistance(row.db, rays.down, inp.bareSPL, env, usePeak);
+      var bUp = searchDistance(row.db, rays.up, inp.bareSPL, env, usePeak);
+      var bCross = searchDistance(row.db, rays.cross, inp.bareSPL, env, usePeak);
+      var sDown = searchDistance(row.db, rays.down, inp.suppressedSPL, env, usePeak);
+      var sUp = searchDistance(row.db, rays.up, inp.suppressedSPL, env, usePeak);
+      var sCross = searchDistance(row.db, rays.cross, inp.suppressedSPL, env, usePeak);
       var rowClass = usePeak ? ' class="is-peak-row"' : '';
       html +=
         '<tr' + rowClass + '>' +
         '<td>' + row.label + '</td>' +
-        '<td>' + formatDistCell(dDown) + '</td>' +
-        '<td>' + formatDistCell(dUp) + '</td>' +
-        '<td>' + formatDistCell(dCross) + '</td>' +
+        '<td>' + formatDistCell(bDown) + '</td>' +
+        '<td>' + formatDistCell(bUp) + '</td>' +
+        '<td>' + formatDistCell(bCross) + '</td>' +
+        '<td class="col-supp">' + formatDistCell(sDown) + '</td>' +
+        '<td class="col-supp">' + formatDistCell(sUp) + '</td>' +
+        '<td class="col-supp">' + formatDistCell(sCross) + '</td>' +
         '</tr>';
     }
 
@@ -521,7 +690,8 @@
 
   function blankReadout() {
     cursorReadout.textContent =
-      'Continuous: --- dB · Peak≈: --- dB · Dist: --- ' + distUnit();
+      'Continuous: --- dB · Peak≈: --- dB · Dist: --- ' + distUnit() +
+      ' · map=' + mapSource;
   }
 
   function generateNoiseMap() {
@@ -532,7 +702,6 @@
     btn.disabled = true;
     btn.textContent = 'Computing…';
 
-    // Yield so UI can update before heavy loop
     setTimeout(function () {
       lastGrid = generateGrid(
         inp.startingSPL, inp.tempC, inp.humidityPct, inp.terrain,
@@ -555,7 +724,6 @@
     var py = clientY - rect.top;
 
     var size = lastGrid.size;
-    // Map CSS pixels → grid via displayed size (not bitmap width) so CSS scaling stays accurate
     var dispW = rect.width || canvas.width;
     var dispH = rect.height || canvas.height;
     var x = Math.floor(px / dispW * size);
@@ -588,7 +756,8 @@
 
     cursorReadout.textContent =
       'Continuous: ' + continuous.toFixed(1) + ' dB · Peak≈: ' +
-      peak.toFixed(1) + ' dB · Dist: ' + formatDist(dist_m);
+      peak.toFixed(1) + ' dB · Dist: ' + formatDist(dist_m) +
+      ' · map=' + mapSource;
   }
 
   function updateUnitLabels() {
@@ -617,7 +786,6 @@
     }
   }
 
-  /** Convert displayed field values when toggling unit system (physics-preserving). */
   function convertDisplayedValues(from, to) {
     if (from === to) return;
     var maxEl = document.getElementById('maxDistance');
@@ -653,7 +821,6 @@
     btnM.setAttribute('aria-pressed', units === 'metric' ? 'true' : 'false');
     btnI.setAttribute('aria-pressed', units === 'imperial' ? 'true' : 'false');
 
-    // Re-render map labels/rings in new units without recomputing physics if grid exists
     if (lastGrid) {
       renderGrid(lastGrid, lastMaxDistance);
       if (gridInfo) {
@@ -664,15 +831,231 @@
           'Grid: ' + lastGrid.size + '×' + lastGrid.size +
           ' · cell ≈ ' + cellLabel +
           ' · cap ' + MAX_CELLS_PER_AXIS + ' / axis' +
+          ' · map=' + mapSource +
           ' · map = engineering broadband (not certified Lpeak/LAeq)';
       }
       blankReadout();
     }
 
-    // Refresh distance table display units from current SI inputs
     var inp = readInputsAsSI();
     lastInputs = inp;
     updateOshaDistanceTable(inp);
+  }
+
+  function setMapSource(next) {
+    if (next !== 'bare' && next !== 'suppressed') return;
+    mapSource = next;
+    var btnB = document.getElementById('btnMapBare');
+    var btnS = document.getElementById('btnMapSuppressed');
+    if (btnB && btnS) {
+      btnB.classList.toggle('is-active', mapSource === 'bare');
+      btnS.classList.toggle('is-active', mapSource === 'suppressed');
+      btnB.setAttribute('aria-pressed', mapSource === 'bare' ? 'true' : 'false');
+      btnS.setAttribute('aria-pressed', mapSource === 'suppressed' ? 'true' : 'false');
+    }
+    // Regenerate map for the other series
+    generateNoiseMap();
+  }
+
+  function populateCalibers() {
+    var sel = document.getElementById('caliberFilter');
+    if (!sel) return;
+    sel.innerHTML = '';
+    var optAll = document.createElement('option');
+    optAll.value = '';
+    optAll.textContent = 'All calibers / hosts (' + suppressors.length + ')';
+    sel.appendChild(optAll);
+    for (var i = 0; i < caliberList.length; i++) {
+      var opt = document.createElement('option');
+      opt.value = caliberList[i];
+      opt.textContent = caliberList[i];
+      sel.appendChild(opt);
+    }
+  }
+
+  function populateBareHosts(preferredHostKey) {
+    var sel = document.getElementById('bareHost');
+    if (!sel) return;
+    var prev = selectedBareId;
+    sel.innerHTML = '';
+    var optCustom = document.createElement('option');
+    optCustom.value = 'custom';
+    optCustom.textContent = 'Custom / manual Starting SPL';
+    sel.appendChild(optCustom);
+
+    var matching = [];
+    var others = [];
+    for (var i = 0; i < hostBare.length; i++) {
+      var h = hostBare[i];
+      if (preferredHostKey && h.host_key === preferredHostKey) matching.push(h);
+      else others.push(h);
+    }
+    var ordered = matching.concat(others);
+    for (var j = 0; j < ordered.length; j++) {
+      var g = ordered[j];
+      var opt = document.createElement('option');
+      opt.value = g.id;
+      opt.textContent =
+        g.muzzle_spl_dB.toFixed(1) + ' dB — ' + g.name + ' · ' + g.caliber;
+      sel.appendChild(opt);
+    }
+
+    if (prev && (prev === 'custom' || findBareById(prev))) {
+      sel.value = prev;
+      selectedBareId = prev;
+    } else {
+      sel.value = 'custom';
+      selectedBareId = 'custom';
+    }
+  }
+
+  function renderSuppressorList() {
+    var list = document.getElementById('suppressorList');
+    var countEl = document.getElementById('suppressorCount');
+    var calSel = document.getElementById('caliberFilter');
+    var searchEl = document.getElementById('suppressorSearch');
+    if (!list) return;
+
+    var cal = calSel ? calSel.value : '';
+    var q = (searchEl && searchEl.value ? searchEl.value : '').trim().toLowerCase();
+
+    var items = [];
+    for (var i = 0; i < suppressors.length; i++) {
+      var s = suppressors[i];
+      if (cal && s.caliber !== cal) continue;
+      if (q) {
+        var hay = (s.manufacturer + ' ' + s.model + ' ' + s.display_name + ' ' + s.caliber).toLowerCase();
+        if (hay.indexOf(q) === -1) continue;
+      }
+      items.push(s);
+    }
+
+    // Cap DOM nodes for usability (~1600 rows) — show first 400 matches + note
+    var CAP = 400;
+    var shown = items.slice(0, CAP);
+    if (countEl) {
+      countEl.textContent = items.length > CAP
+        ? '(' + items.length + ' match, showing ' + CAP + ' — refine search)'
+        : '(' + items.length + ')';
+    }
+
+    var html = '';
+    for (var j = 0; j < shown.length; j++) {
+      var row = shown[j];
+      var sel = row.id === selectedSuppressorId ? ' is-selected' : '';
+      var red = row.reduction_dB != null
+        ? ' · −' + Number(row.reduction_dB).toFixed(1) + ' dB'
+        : '';
+      html +=
+        '<li role="option" tabindex="0" class="' + sel.trim() +
+        '" data-id="' + row.id + '" aria-selected="' +
+        (row.id === selectedSuppressorId ? 'true' : 'false') + '">' +
+        '<span class="spl-tag">' + Number(row.ml_dba).toFixed(1) + '</span> ' +
+        row.manufacturer + ' ' + row.model + red +
+        '<br><span class="hint">' + row.caliber + '</span></li>';
+    }
+    if (!shown.length) {
+      html = '<li class="hint" style="cursor:default">No suppressors match.</li>';
+    }
+    list.innerHTML = html;
+  }
+
+  function onSuppressorPick(id) {
+    selectedSuppressorId = id;
+    var sup = findSuppressorById(id);
+    renderSuppressorList();
+
+    var note = document.getElementById('suppressorPickNote');
+    if (note && sup) {
+      note.textContent =
+        (sup.display_name || (sup.manufacturer + ' ' + sup.model)) +
+        ' · ml_dba=' + Number(sup.ml_dba).toFixed(2) +
+        (sup.reduction_dB != null
+          ? ' · baked reduction ' + Number(sup.reduction_dB).toFixed(2) +
+            ' dB vs ' + (sup.bare_ref_name || 'bare_ref')
+          : ' · no baked bare_ref (uses ml_dba)') +
+        ' — ' + (sup.source_note || '');
+    }
+
+    // Suggest matching cited gun when suppressor has bare_ref
+    if (sup) {
+      populateBareHosts(sup.host_key);
+      if (sup.bare_ref_id && findBareById(sup.bare_ref_id)) {
+        var bareSel = document.getElementById('bareHost');
+        if (bareSel) {
+          bareSel.value = sup.bare_ref_id;
+          selectedBareId = sup.bare_ref_id;
+          applyBareSelection(false);
+        }
+      }
+    }
+
+    scheduleDistanceTableUpdate();
+  }
+
+  function applyBareSelection(updateFromGun) {
+    var gun = selectedBareId !== 'custom' ? findBareById(selectedBareId) : null;
+    var splEl = document.getElementById('startingSPL');
+    if (gun && splEl && updateFromGun !== false) {
+      splEl.value = Number(gun.muzzle_spl_dB).toFixed(1);
+      splEl.readOnly = true;
+      splEl.title = gun.source_note || 'Cited Bare Muzzle measurement';
+    } else if (splEl) {
+      splEl.readOnly = false;
+      splEl.title = 'Custom / manual Starting SPL override';
+    }
+    scheduleDistanceTableUpdate();
+  }
+
+  function wireProfilesUi() {
+    populateCalibers();
+    populateBareHosts(null);
+    renderSuppressorList();
+
+    var calSel = document.getElementById('caliberFilter');
+    var searchEl = document.getElementById('suppressorSearch');
+    var list = document.getElementById('suppressorList');
+    var bareSel = document.getElementById('bareHost');
+
+    if (calSel) {
+      calSel.addEventListener('change', function () {
+        var cal = calSel.value;
+        var pref = cal ? hostKey(cal) : null;
+        populateBareHosts(pref);
+        renderSuppressorList();
+      });
+    }
+    if (searchEl) {
+      searchEl.addEventListener('input', function () {
+        if (listFilterTimer) clearTimeout(listFilterTimer);
+        listFilterTimer = setTimeout(renderSuppressorList, 80);
+      });
+    }
+    if (list) {
+      list.addEventListener('click', function (e) {
+        var li = e.target.closest('li[data-id]');
+        if (!li) return;
+        onSuppressorPick(li.getAttribute('data-id'));
+      });
+      list.addEventListener('keydown', function (e) {
+        if (e.key !== 'Enter' && e.key !== ' ') return;
+        var li = e.target.closest('li[data-id]');
+        if (!li) return;
+        e.preventDefault();
+        onSuppressorPick(li.getAttribute('data-id'));
+      });
+    }
+    if (bareSel) {
+      bareSel.addEventListener('change', function () {
+        selectedBareId = bareSel.value || 'custom';
+        applyBareSelection(true);
+      });
+    }
+
+    var btnMapBare = document.getElementById('btnMapBare');
+    var btnMapSupp = document.getElementById('btnMapSuppressed');
+    if (btnMapBare) btnMapBare.addEventListener('click', function () { setMapSource('bare'); });
+    if (btnMapSupp) btnMapSupp.addEventListener('click', function () { setMapSource('suppressed'); });
   }
 
   document.getElementById('btnGenerate').addEventListener('click', generateNoiseMap);
@@ -684,7 +1067,6 @@
     onCanvasMove(e);
   }, { passive: false });
 
-  // Live distance table when controls change (map still regenerates on Generate)
   var liveIds = ['startingSPL', 'maxDistance', 'tempC', 'humidity', 'terrain', 'windSpeed', 'windDir'];
   for (var li = 0; li < liveIds.length; li++) {
     var el = document.getElementById(liveIds[li]);
@@ -698,7 +1080,9 @@
   });
 
   updateUnitLabels();
-  // Initial map after layout paints so square panel has non-zero size
+  wireProfilesUi();
+  updateCompareSummary(resolveSourceLevels());
+
   requestAnimationFrame(function () {
     requestAnimationFrame(function () {
       generateNoiseMap();

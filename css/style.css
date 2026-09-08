@@ -471,3 +471,159 @@ body {
 .footer-model {
   margin-top: 0.55rem;
 }
+
+/* Phase 3 — profiles + bare vs suppressed compare */
+.layout {
+  grid-template-columns: minmax(260px, 320px) minmax(0, 1fr);
+}
+
+.field-note,
+.hint {
+  margin: 0.25rem 0 0;
+  font-size: 0.65rem;
+  color: var(--text-muted);
+  line-height: 1.35;
+}
+
+.hint {
+  font-weight: 500;
+  text-transform: none;
+  letter-spacing: 0;
+}
+
+.list-wrap {
+  max-height: 11.5rem;
+  overflow: auto;
+  border: 1px solid var(--border);
+  border-radius: 4px;
+  background: var(--input-bg);
+  -webkit-overflow-scrolling: touch;
+}
+
+.profile-list {
+  list-style: none;
+  margin: 0;
+  padding: 0;
+}
+
+.profile-list li {
+  display: block;
+  width: 100%;
+  padding: 0.35rem 0.5rem;
+  border: none;
+  border-bottom: 1px solid rgba(42, 49, 64, 0.7);
+  background: transparent;
+  color: var(--text);
+  font-size: 0.72rem;
+  text-align: left;
+  cursor: pointer;
+  line-height: 1.3;
+}
+
+.profile-list li:last-child {
+  border-bottom: none;
+}
+
+.profile-list li:hover,
+.profile-list li:focus {
+  background: var(--bg-elevated);
+  outline: none;
+}
+
+.profile-list li.is-selected {
+  background: linear-gradient(180deg, rgba(201, 162, 39, 0.22), rgba(138, 112, 24, 0.28));
+  color: var(--accent);
+  box-shadow: inset 3px 0 0 var(--accent);
+}
+
+.profile-list .spl-tag {
+  display: inline-block;
+  min-width: 3.2rem;
+  font-variant-numeric: tabular-nums;
+  font-weight: 700;
+  color: var(--accent);
+}
+
+.map-source-toggle {
+  display: grid;
+  grid-template-columns: 1fr 1fr;
+  gap: 0;
+  margin: 0.55rem 0 0.65rem;
+  border: 1px solid var(--border);
+  border-radius: 4px;
+  overflow: hidden;
+  background: var(--input-bg);
+}
+
+.map-source-toggle .units-btn + .units-btn {
+  border-left: 1px solid var(--border);
+}
+
+.compare-summary {
+  margin-bottom: 0.65rem;
+  padding: 0.55rem 0.65rem;
+  background: var(--bg-elevated);
+  border: 1px solid var(--border);
+  border-radius: 4px;
+}
+
+.compare-grid {
+  display: grid;
+  grid-template-columns: 1fr;
+  gap: 0.25rem;
+  font-size: 0.78rem;
+  font-variant-numeric: tabular-nums;
+}
+
+.compare-grid .cmp-label {
+  display: inline-block;
+  min-width: 7.5rem;
+  color: var(--text-muted);
+  font-size: 0.68rem;
+  text-transform: uppercase;
+  letter-spacing: 0.04em;
+}
+
+.osha-table-compare thead tr:first-child th[colspan] {
+  text-align: center;
+  border-bottom: none;
+  padding-bottom: 0.1rem;
+}
+
+.osha-table-compare thead tr:last-child th {
+  font-size: 0.58rem;
+}
+
+.osha-table-compare td.col-supp,
+.osha-table-compare th.col-supp {
+  background: rgba(201, 162, 39, 0.06);
+}
+
+.osha-table-compare .na {
+  color: var(--text-muted);
+}
+
+.footer-phase3 {
+  margin-top: 0.55rem;
+  color: var(--text-muted);
+}
+
+.footer-phase3 strong {
+  color: var(--accent);
+  font-weight: 600;
+}
+
+.footer-phase3 code {
+  font-size: 0.68rem;
+  color: var(--text);
+}
+
+@media (max-width: 800px) {
+  .layout {
+    grid-template-columns: 1fr;
+  }
+
+  .list-wrap {
+    max-height: 9.5rem;
+  }
+}
