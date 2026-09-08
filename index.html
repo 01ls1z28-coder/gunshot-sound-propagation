@@ -70,6 +70,33 @@
 
       <button type="button" class="btn btn-primary" id="btnGenerate">Generate Noise Map</button>
 
+      <div class="osha-distances" aria-label="Distance to OSHA levels">
+        <p class="legend-heading">Distance to OSHA levels</p>
+        <p class="osha-table-note" id="oshaTableNote">
+          Continuous field SPL along downwind / upwind / crosswind rays.
+          Map values are an engineering broadband estimate — not certified L<sub>peak</sub> / L<sub>Aeq</sub>.
+        </p>
+        <div class="osha-table-wrap">
+          <table class="osha-table" id="oshaDistanceTable">
+            <thead>
+              <tr>
+                <th scope="col">Level</th>
+                <th scope="col">Down</th>
+                <th scope="col">Up</th>
+                <th scope="col">Cross</th>
+              </tr>
+            </thead>
+            <tbody id="oshaDistanceBody">
+              <!-- filled by app.js -->
+            </tbody>
+          </table>
+        </div>
+        <p class="osha-peak-note">
+          <strong>140 dB peak</strong> row uses the peak-style pressure-sum estimate
+          vs OSHA 1910.95 impulsive/impact footnote (≤140 dB peak SPL) — not a lab L<sub>peak</sub>.
+        </p>
+      </div>
+
       <div class="inline-legend" aria-label="SPL color legend">
         <p class="legend-heading">SPL Color Legend</p>
         <div class="legend-row"><span class="swatch swatch-high"></span> High SPL (≈180 dB)</div>
@@ -82,9 +109,11 @@
     </aside>
 
     <section class="panel map-panel" aria-label="Noise map">
-      <div class="readout" id="cursorReadout">SPL: --- dB   Dist: --- m</div>
+      <div class="readout" id="cursorReadout">
+        Continuous: --- dB · Peak≈: --- dB · Dist: --- m
+      </div>
       <div class="map-wrap">
-        <canvas id="noiseMap" role="img" aria-label="SPL heatmap"></canvas>
+        <canvas id="noiseMap" role="img" aria-label="SPL heatmap (engineering broadband estimate)"></canvas>
       </div>
     </section>
   </main>
@@ -95,6 +124,8 @@
       and wind — showing how gunshot sound levels fall off with distance across the field.
       Propagation includes spherical spreading, terrain loss, ground reflection, and a
       three-band (low/mid/high) weighted sum, plus an optional supersonic shockwave path.
+      Map SPL is an <strong>engineering broadband estimate</strong>, not certified
+      L<sub>peak</sub> or L<sub>Aeq</sub>.
     </p>
     <p class="footer-model">
       <strong>How it works (Phase 1):</strong>
@@ -106,14 +137,32 @@
       and Annex B humidity (psat/pr); loss is A<sub>atm</sub> = α·d at each band center
       frequency (Hz). Default air pressure is 1 atm (101.325 kPa).
     </p>
+    <p class="footer-phase2">
+      <strong>Phase 2 — peak-style &amp; distance search:</strong>
+      <em>Continuous / field SPL</em> is the existing 3-band weighted pipeline
+      (0.45·L<sub>125</sub> + 0.35·L<sub>1k</sub> + 0.20·L<sub>4k</sub>), with optional
+      shockwave merge via pressure sum. <em>Peak-style ≈</em> extends that pressure-domain
+      path: p<sub>i</sub> = 10<sup>L<sub>i</sub>/20</sup> for each band;
+      L<sub>peak≈</sub> = 20·log₁₀(Σ p<sub>i</sub>) (+ shock pressure if isSupersonic).
+      This is an engineering upper-bound-style estimate from the same band field — not a
+      measured impulse L<sub>peak</sub>. Distance-to-OSHA rows (85 action, 90/8 h, 95/4 h,
+      100/2 h, 105/1 h, 115/≤¼ h) binary-search radial distance along downwind
+      (ray = wind dir), upwind (ray = wind + π), and crosswind (ray = wind + π/2) where
+      continuous Propagate equals that dB; off-map → “beyond max distance.” The
+      <strong>140 dB peak</strong> row searches the same rays on the peak-style estimate
+      against the OSHA 1910.95 impulsive/impact footnote (≤140 dB peak SPL).
+    </p>
     <p class="footer-osha">
       <strong>OSHA reference (29 CFR 1910.95):</strong>
       Map contours show the 85 dBA action level (1910.95(c)(1)–(c)(2)) and selected
       Table G-16 permissible noise exposures (dBA, slow response): 90 (8 h), 95 (4 h),
-      100 (2 h), 105 (1 h), and 115 (¼ h or less). These are workplace time-weighted /
-      continuous exposure criteria for comparison against the map’s modeled SPL —
+      100 (2 h), 105 (1 h), and 115 (¼ h or less). Table G-16 / related guidance also
+      states exposure to impulsive or impact noise should not exceed <strong>140 dB peak</strong>
+      sound pressure level. G-16 levels are workplace time-weighted / continuous exposure
+      criteria for comparison against the map’s modeled continuous field SPL —
       not a hearing-safety certification. Gunshots are impulse events; continuous / TWA
-      limits are shown for reference only.
+      limits are shown for reference only. Peak-style readout and the 140 dB row are
+      engineering estimates, not certified L<sub>peak</sub>.
     </p>
     <p class="disclaimer">
       Disclaimer: values are compiled engineering estimates for visualization and education —

@@ -376,3 +376,98 @@ body {
     margin: 0 auto;
   }
 }
+
+/* Phase 2 — OSHA distance table */
+.osha-distances {
+  margin-top: 0.65rem;
+  padding: 0.6rem 0.7rem;
+  background: var(--bg-elevated);
+  border: 1px solid var(--border);
+  border-radius: 4px;
+}
+
+.osha-table-note,
+.osha-peak-note {
+  margin: 0 0 0.45rem;
+  font-size: 0.65rem;
+  color: var(--text-muted);
+  line-height: 1.35;
+}
+
+.osha-peak-note {
+  margin: 0.45rem 0 0;
+}
+
+.osha-peak-note strong {
+  color: var(--accent);
+  font-weight: 600;
+}
+
+.osha-table-wrap {
+  overflow-x: auto;
+  -webkit-overflow-scrolling: touch;
+}
+
+.osha-table {
+  width: 100%;
+  border-collapse: collapse;
+  font-size: 0.68rem;
+  font-variant-numeric: tabular-nums;
+}
+
+.osha-table th,
+.osha-table td {
+  padding: 0.22rem 0.28rem;
+  text-align: right;
+  border-bottom: 1px solid rgba(42, 49, 64, 0.85);
+  white-space: nowrap;
+}
+
+.osha-table th:first-child,
+.osha-table td:first-child {
+  text-align: left;
+  color: var(--text-muted);
+}
+
+.osha-table thead th {
+  color: var(--accent);
+  font-weight: 700;
+  text-transform: uppercase;
+  letter-spacing: 0.04em;
+  font-size: 0.62rem;
+  border-bottom: 1px solid var(--border);
+}
+
+.osha-table tbody tr.is-peak-row td {
+  color: #ff8fa3;
+}
+
+.osha-table tbody tr.is-peak-row td:first-child {
+  color: #ff8fa3;
+  font-weight: 600;
+}
+
+.osha-table .beyond {
+  color: var(--text-muted);
+  font-style: italic;
+}
+
+.readout {
+  max-width: calc(100% - 1.1rem);
+  line-height: 1.35;
+  font-size: 0.78rem;
+}
+
+.footer-phase2 {
+  margin-top: 0.55rem;
+  color: var(--text-muted);
+}
+
+.footer-phase2 strong {
+  color: var(--accent);
+  font-weight: 600;
+}
+
+.footer-model {
+  margin-top: 0.55rem;
+}

@@ -2,6 +2,9 @@
  * UI + noise-map renderer — port of MainWindow.xaml / MainWindow.xaml.cs
  * Grid is capped for browser performance (see MAX_CELLS_PER_AXIS).
  * Internal acoustics stay metric (SI); UI converts ↔ display units on toggle.
+ *
+ * Phase 2: continuous + peak-style cursor readout; live distance-to-OSHA table
+ * (downwind / upwind / crosswind); OSHA 140 dB peak impulsive row.
  */
 (function () {
   'use strict';
@@ -12,16 +15,24 @@
   /**
    * Official OSHA 29 CFR 1910.95 reference levels (same set as Sound Distance Calculator).
    * Action level: 1910.95(c)(1)–(c)(2). Others: Table G-16 (dBA slow response).
-   * Contours follow the modeled SPL field (not forced circles).
+   * Contours follow the modeled continuous SPL field (not forced circles).
+   * Distances are searched on continuous Propagate unless peakSearch is true.
    */
   var OSHA_LINES = [
-    { db: 85, label: '85 action', color: 'rgba(200, 255, 74, 0.95)' },
-    { db: 90, label: '90 / 8 h', color: 'rgba(255, 196, 86, 0.92)' },
-    { db: 95, label: '95 / 4 h', color: 'rgba(255, 168, 76, 0.9)' },
-    { db: 100, label: '100 / 2 h', color: 'rgba(255, 120, 90, 0.9)' },
-    { db: 105, label: '105 / 1 h', color: 'rgba(255, 90, 110, 0.9)' },
-    { db: 115, label: '115 / ≤¼ h', color: 'rgba(255, 72, 120, 0.95)' }
+    { db: 85, label: '85 action', color: 'rgba(200, 255, 74, 0.95)', peakSearch: false },
+    { db: 90, label: '90 / 8 h', color: 'rgba(255, 196, 86, 0.92)', peakSearch: false },
+    { db: 95, label: '95 / 4 h', color: 'rgba(255, 168, 76, 0.9)', peakSearch: false },
+    { db: 100, label: '100 / 2 h', color: 'rgba(255, 120, 90, 0.9)', peakSearch: false },
+    { db: 105, label: '105 / 1 h', color: 'rgba(255, 90, 110, 0.9)', peakSearch: false },
+    { db: 115, label: '115 / ≤¼ h', color: 'rgba(255, 72, 120, 0.95)', peakSearch: false }
   ];
+
+  /** OSHA 1910.95 impulsive/impact footnote: ≤140 dB peak SPL — table row only (not map contour). */
+  var OSHA_PEAK_LINE = {
+    db: 140,
+    label: '140 peak',
+    peakSearch: true
+  };
 
   var M_PER_FT = 0.3048;
   var MPS_PER_MPH = 0.44704;
@@ -32,11 +43,15 @@
   var lastGridSize = 0;
   /** @type {'metric'|'imperial'} */
   var units = 'metric';
+  /** Last SI inputs used for map / distance table (for hover peak recompute). */
+  var lastInputs = null;
+  var distanceUpdateTimer = null;
 
   var canvas = document.getElementById('noiseMap');
   var ctx = canvas.getContext('2d');
   var cursorReadout = document.getElementById('cursorReadout');
   var gridInfo = document.getElementById('gridInfo');
+  var oshaDistanceBody = document.getElementById('oshaDistanceBody');
 
   function parseOrDefault(text, fallback) {
     var value = parseFloat(String(text).replace(',', '.'));
@@ -52,6 +67,16 @@
       return meters.toFixed(1) + ' m';
     }
     return (meters / M_PER_FT).toFixed(1) + ' ft';
+  }
+
+  function formatDistCell(result) {
+    if (!result || result.status === 'outside_map') {
+      return '<span class="beyond">beyond max distance</span>';
+    }
+    if (result.status === 'below_near') {
+      return formatDist(result.distance_m);
+    }
+    return formatDist(result.distance_m);
   }
 
   function mapSPLToColor(spl) {
@@ -113,7 +138,8 @@
       gridInfo.textContent =
         'Grid: ' + gridSize + '×' + gridSize +
         ' · cell ≈ ' + cellLabel +
-        ' · cap ' + MAX_CELLS_PER_AXIS + ' / axis';
+        ' · cap ' + MAX_CELLS_PER_AXIS + ' / axis' +
+        ' · map = engineering broadband (not certified Lpeak/LAeq)';
     }
 
     return { data: grid, size: gridSize };
@@ -126,7 +152,7 @@
     c.moveTo(x + radius, y);
     c.arcTo(x + w, y, x + w, y + h, radius);
     c.arcTo(x + w, y + h, x, y + h, radius);
-    c.arcTo(x, y + h, x, y, radius);
+    c.arcTo(x + w, y + h, x, y, radius);
     c.arcTo(x, y, x + w, y, radius);
     c.closePath();
   }
@@ -138,7 +164,7 @@
   }
 
   /**
-   * Marching-squares iso-contours on the SPL grid, stroked in canvas pixels.
+   * Marching-squares iso-contours on the continuous SPL grid, stroked in canvas pixels.
    * Grid index: data[x * size + y] (same as heatmap).
    */
   function drawOshaContours(pack, side) {
@@ -266,6 +292,23 @@
       }
       ctx.restore();
     }
+
+    // Contour note: 140 dB peak is impulsive criterion — not drawn on continuous field
+    ctx.save();
+    ctx.font = '600 10px "Segoe UI", system-ui, sans-serif';
+    ctx.textAlign = 'right';
+    ctx.textBaseline = 'bottom';
+    var note = '140 dB peak (OSHA impulse) → table (peak-style), not continuous contour';
+    var noteX = side - 8;
+    var noteY = side - 8;
+    var nw = ctx.measureText(note).width + 10;
+    var nh = 16;
+    ctx.fillStyle = 'rgba(8, 10, 14, 0.78)';
+    roundRectPath(ctx, noteX - nw, noteY - nh, nw, nh, 3);
+    ctx.fill();
+    ctx.fillStyle = 'rgba(255, 143, 163, 0.95)';
+    ctx.fillText(note, noteX - 5, noteY - 3);
+    ctx.restore();
   }
 
   function renderGrid(pack, maxDistance) {
@@ -337,7 +380,7 @@
       ctx.fillText(ringLabel(dist), centerPx + radiusPx + 6, centerPx + 4);
     }
 
-    // OSHA iso-contours follow the SPL field (wind may distort circles)
+    // OSHA iso-contours follow the continuous SPL field (wind may distort circles)
     drawOshaContours(pack, side);
 
     // Source marker
@@ -385,8 +428,105 @@
     };
   }
 
+  /**
+   * Binary-search distance for one OSHA level along one ray.
+   * Continuous levels use Acoustics.DistanceToLevel (Propagate).
+   * Peak 140 uses the same bisection on PropagateWithPeak(...).peak.
+   */
+  function searchDistance(targetDb, rayAngleRad, inp, usePeak) {
+    if (!usePeak) {
+      return Acoustics.DistanceToLevel(
+        targetDb,
+        inp.maxDistance_m,
+        inp.startingSPL,
+        inp.tempC,
+        inp.humidityPct,
+        inp.terrain,
+        false,
+        inp.windSpeed_mps,
+        inp.windDirRad,
+        rayAngleRad
+      );
+    }
+
+    var dMin = 1.0;
+    var dMax = Math.max(dMin, inp.maxDistance_m);
+
+    function peakAt(d) {
+      return Acoustics.PropagateWithPeak(
+        inp.startingSPL, d, inp.tempC, inp.humidityPct, inp.terrain,
+        false, inp.windSpeed_mps, inp.windDirRad, rayAngleRad
+      ).peak;
+    }
+
+    if (peakAt(dMin) < targetDb) {
+      return { distance_m: dMin, status: 'below_near' };
+    }
+    if (peakAt(dMax) >= targetDb) {
+      return { distance_m: dMax, status: 'outside_map' };
+    }
+
+    var lo = dMin;
+    var hi = dMax;
+    for (var i = 0; i < 48; i++) {
+      var mid = 0.5 * (lo + hi);
+      if (peakAt(mid) >= targetDb) lo = mid;
+      else hi = mid;
+    }
+    return { distance_m: 0.5 * (lo + hi), status: 'ok' };
+  }
+
+  /** Live distance-to-OSHA table: downwind / upwind / crosswind. */
+  function updateOshaDistanceTable(inp) {
+    if (!oshaDistanceBody || !inp) return;
+
+    var windDir = inp.windDirRad;
+    var rays = {
+      down: windDir,
+      up: windDir + Math.PI,
+      cross: windDir + Math.PI / 2
+    };
+
+    var rows = OSHA_LINES.concat([OSHA_PEAK_LINE]);
+    var html = '';
+
+    for (var i = 0; i < rows.length; i++) {
+      var row = rows[i];
+      var usePeak = !!row.peakSearch;
+      var dDown = searchDistance(row.db, rays.down, inp, usePeak);
+      var dUp = searchDistance(row.db, rays.up, inp, usePeak);
+      var dCross = searchDistance(row.db, rays.cross, inp, usePeak);
+      var rowClass = usePeak ? ' class="is-peak-row"' : '';
+      html +=
+        '<tr' + rowClass + '>' +
+        '<td>' + row.label + '</td>' +
+        '<td>' + formatDistCell(dDown) + '</td>' +
+        '<td>' + formatDistCell(dUp) + '</td>' +
+        '<td>' + formatDistCell(dCross) + '</td>' +
+        '</tr>';
+    }
+
+    oshaDistanceBody.innerHTML = html;
+  }
+
+  function scheduleDistanceTableUpdate() {
+    if (distanceUpdateTimer) clearTimeout(distanceUpdateTimer);
+    distanceUpdateTimer = setTimeout(function () {
+      distanceUpdateTimer = null;
+      var inp = readInputsAsSI();
+      lastInputs = inp;
+      updateOshaDistanceTable(inp);
+    }, 120);
+  }
+
+  function blankReadout() {
+    cursorReadout.textContent =
+      'Continuous: --- dB · Peak≈: --- dB · Dist: --- ' + distUnit();
+  }
+
   function generateNoiseMap() {
     var inp = readInputsAsSI();
+    lastInputs = inp;
 
     var btn = document.getElementById('btnGenerate');
     btn.disabled = true;
@@ -399,14 +539,15 @@
         inp.windSpeed_mps, inp.windDirRad, inp.maxDistance_m
       );
       renderGrid(lastGrid, inp.maxDistance_m);
+      updateOshaDistanceTable(inp);
       btn.disabled = false;
       btn.textContent = 'Generate Noise Map';
-      cursorReadout.textContent = 'SPL: --- dB   Dist: --- ' + distUnit();
+      blankReadout();
     }, 20);
   }
 
   function onCanvasMove(e) {
-    if (!lastGrid) return;
+    if (!lastGrid || !lastInputs) return;
     var rect = canvas.getBoundingClientRect();
     var clientX = e.touches ? e.touches[0].clientX : e.clientX;
     var clientY = e.touches ? e.touches[0].clientY : e.clientY;
@@ -421,16 +562,33 @@
     var y = Math.floor(py / dispH * size);
 
     if (x < 0 || y < 0 || x >= size || y >= size) {
-      cursorReadout.textContent = 'SPL: --- dB   Dist: --- ' + distUnit();
+      blankReadout();
       return;
     }
 
-    var spl = lastGrid.data[x * size + y];
+    var continuous = lastGrid.data[x * size + y];
     var center = size / 2;
     var dx = (x - center) * cellSize_m;
     var dy = (y - center) * cellSize_m;
     var dist_m = Math.sqrt(dx * dx + dy * dy);
-    cursorReadout.textContent = 'SPL: ' + spl.toFixed(1) + ' dB   Dist: ' + formatDist(dist_m);
+    var distForProp = dist_m < 1.0 ? 1.0 : dist_m;
+    var angleRad = Math.atan2(dy, dx);
+
+    var peak = Acoustics.PropagateWithPeak(
+      lastInputs.startingSPL,
+      distForProp,
+      lastInputs.tempC,
+      lastInputs.humidityPct,
+      lastInputs.terrain,
+      false,
+      lastInputs.windSpeed_mps,
+      lastInputs.windDirRad,
+      angleRad
+    ).peak;
+
+    cursorReadout.textContent =
+      'Continuous: ' + continuous.toFixed(1) + ' dB · Peak≈: ' +
+      peak.toFixed(1) + ' dB · Dist: ' + formatDist(dist_m);
   }
 
   function updateUnitLabels() {
@@ -505,10 +663,16 @@
         gridInfo.textContent =
           'Grid: ' + lastGrid.size + '×' + lastGrid.size +
           ' · cell ≈ ' + cellLabel +
-          ' · cap ' + MAX_CELLS_PER_AXIS + ' / axis';
+          ' · cap ' + MAX_CELLS_PER_AXIS + ' / axis' +
+          ' · map = engineering broadband (not certified Lpeak/LAeq)';
       }
-      cursorReadout.textContent = 'SPL: --- dB   Dist: --- ' + distUnit();
+      blankReadout();
     }
+
+    // Refresh distance table display units from current SI inputs
+    var inp = readInputsAsSI();
+    lastInputs = inp;
+    updateOshaDistanceTable(inp);
   }
 
   document.getElementById('btnGenerate').addEventListener('click', generateNoiseMap);
@@ -519,6 +683,15 @@
     e.preventDefault();
     onCanvasMove(e);
   }, { passive: false });
+
+  // Live distance table when controls change (map still regenerates on Generate)
+  var liveIds = ['startingSPL', 'maxDistance', 'tempC', 'humidity', 'terrain', 'windSpeed', 'windDir'];
+  for (var li = 0; li < liveIds.length; li++) {
+    var el = document.getElementById(liveIds[li]);
+    if (!el) continue;
+    el.addEventListener('input', scheduleDistanceTableUpdate);
+    el.addEventListener('change', scheduleDistanceTableUpdate);
+  }
 
   window.addEventListener('resize', function () {
     if (lastGrid) renderGrid(lastGrid, lastMaxDistance);

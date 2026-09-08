@@ -1,15 +1,23 @@
 /**
- * Acoustics — Phase 1 accuracy upgrade of the Gunshot Sound Propagation web port.
+ * Acoustics — Phase 1 + Phase 2 of the Gunshot Sound Propagation web port.
  *
- * Deviations from the original desktop C# port (Phase 1):
+ * Phase 1:
  *   - Wind: directional refraction-style factor
  *     factor = 1 + 0.03·v·cos(relAngle), clamped [0.7, 1.3]; ΔL = 20·log10(factor).
- *     Downwind (cos>0) boosts; upwind (cos<0) attenuates (fixes prior upwind boost bug).
- *   - Atmospheric absorption: ISO 9613-1:1993 pure-tone attenuation coefficient α (dB/m),
- *     Eq. (5) with frO / frN and Annex B humidity (psat/pr). Default pa = pr = 101.325 kPa.
+ *   - Atmospheric absorption: ISO 9613-1:1993 pure-tone α (dB/m), Eq. (5).
  *
- * Spherical spreading, terrain, ground reflection, band weights, and shockwave pipeline
- * remain as in the desktop-derived port.
+ * Phase 2:
+ *   - Continuous / field SPL: existing 3-band weighted Propagate pipeline
+ *     (LowWeight·L_low + MidWeight·L_mid + HighWeight·L_high), then optional
+ *     shockwave merge in the pressure domain (same as desktop-derived port).
+ *   - Peak-style estimate: coherent pressure-domain sum of the three band
+ *     linear pressures p_i = 10^(L_i/20), plus shock pressure when isSupersonic;
+ *     L_peak≈ = 20·log₁₀(Σ p_i). Extends the same pressure-sum technique already
+ *     used for field+shock merge — not a measured Lpeak / OSHA impulse criterion.
+ *   - Distance-to-level: binary search on Propagate(distance) along a ray.
+ *
+ * Spherical spreading, terrain, ground reflection, band weights remain as in
+ * the desktop-derived port.
  */
 (function (global) {
   'use strict';
@@ -168,10 +176,10 @@
   }
 
   /**
-   * Propagate — same signature and band/shockwave pipeline as Acoustics.Propagate,
-   * with Phase 1 wind + ISO 9613-1 absorption.
+   * Run the per-band pipeline; returns band SPLs + optional shock SPL.
+   * Shared by continuous and peak-style estimators (Phase 2).
    */
-  function Propagate(
+  function PropagateBands(
     muzzleSPL,
     distance_m,
     tempC,
@@ -205,16 +213,29 @@
     splHigh = ApplyGroundReflection(splHigh, distance_m, sourceHeight_m, highFreq);
     splHigh = ApplyWind(splHigh, distance_m, windSpeed_mps, windDirRad, rayAngleRad);
 
-    var combined =
-      LowWeight * splLow +
-      MidWeight * splMid +
-      HighWeight * splHigh;
-
     var shockSPL = SupersonicShockwave(muzzleSPL, distance_m, isSupersonic);
 
-    if (shockSPL > 0.0) {
+    return {
+      splLow: splLow,
+      splMid: splMid,
+      splHigh: splHigh,
+      shockSPL: shockSPL
+    };
+  }
+
+  /**
+   * Continuous / field SPL — band-weighted dB average, then optional shock
+   * merge in the pressure domain (identical to prior Propagate).
+   */
+  function continuousFromBands(bands) {
+    var combined =
+      LowWeight * bands.splLow +
+      MidWeight * bands.splMid +
+      HighWeight * bands.splHigh;
+
+    if (bands.shockSPL > 0.0) {
       var pField = Math.pow(10.0, combined / 20.0);
-      var pShock = Math.pow(10.0, shockSPL / 20.0);
+      var pShock = Math.pow(10.0, bands.shockSPL / 20.0);
       var pTotal = pField + pShock;
       combined = 20.0 * Math.log10(pTotal);
     }
@@ -222,12 +243,141 @@
     return combined;
   }
 
+  /**
+   * Peak-style estimate from the same band pipeline (Phase 2).
+   * Coherent pressure-domain sum: p_i = 10^(L_i/20); L_peak≈ = 20·log₁₀(Σ p_i)
+   * (+ shock pressure when isSupersonic). Same pressure-sum technique as the
+   * existing field+shock merge — engineering upper-bound style, not measured Lpeak.
+   */
+  function peakFromBands(bands) {
+    var pLow = Math.pow(10.0, bands.splLow / 20.0);
+    var pMid = Math.pow(10.0, bands.splMid / 20.0);
+    var pHigh = Math.pow(10.0, bands.splHigh / 20.0);
+    var pPeak = pLow + pMid + pHigh;
+
+    if (bands.shockSPL > 0.0) {
+      pPeak += Math.pow(10.0, bands.shockSPL / 20.0);
+    }
+
+    if (pPeak <= 0) {
+      pPeak = 1e-12;
+    }
+
+    return 20.0 * Math.log10(pPeak);
+  }
+
+  /**
+   * Propagate — continuous / field SPL (same signature as before).
+   */
+  function Propagate(
+    muzzleSPL,
+    distance_m,
+    tempC,
+    humidityPct,
+    terrain,
+    isSupersonic,
+    windSpeed_mps,
+    windDirRad,
+    rayAngleRad
+  ) {
+    var bands = PropagateBands(
+      muzzleSPL, distance_m, tempC, humidityPct, terrain,
+      isSupersonic, windSpeed_mps, windDirRad, rayAngleRad
+    );
+    return continuousFromBands(bands);
+  }
+
+  /**
+   * PropagateWithPeak — continuous field SPL + peak-style pressure-sum estimate.
+   */
+  function PropagateWithPeak(
+    muzzleSPL,
+    distance_m,
+    tempC,
+    humidityPct,
+    terrain,
+    isSupersonic,
+    windSpeed_mps,
+    windDirRad,
+    rayAngleRad
+  ) {
+    var bands = PropagateBands(
+      muzzleSPL, distance_m, tempC, humidityPct, terrain,
+      isSupersonic, windSpeed_mps, windDirRad, rayAngleRad
+    );
+    return {
+      continuous: continuousFromBands(bands),
+      peak: peakFromBands(bands)
+    };
+  }
+
+  /**
+   * Binary-search radial distance (m) along rayAngleRad where continuous
+   * Propagate equals targetDb. Assumes overall decay with distance
+   * (ground-reflection ripples are small vs spreading+absorption+terrain).
+   *
+   * Returns { distance_m, status } where status is:
+   *   'ok'           — root found in (1 m, maxDistance_m]
+   *   'outside_map'  — SPL at maxDistance still ≥ target (never reaches level)
+   *   'below_near'   — SPL already < target at 1 m reference
+   */
+  function DistanceToLevel(
+    targetDb,
+    maxDistance_m,
+    muzzleSPL,
+    tempC,
+    humidityPct,
+    terrain,
+    isSupersonic,
+    windSpeed_mps,
+    windDirRad,
+    rayAngleRad
+  ) {
+    var dMin = 1.0;
+    var dMax = Math.max(dMin, maxDistance_m);
+
+    function splAt(d) {
+      return Propagate(
+        muzzleSPL, d, tempC, humidityPct, terrain,
+        isSupersonic, windSpeed_mps, windDirRad, rayAngleRad
+      );
+    }
+
+    var splNear = splAt(dMin);
+    if (splNear < targetDb) {
+      return { distance_m: dMin, status: 'below_near' };
+    }
+
+    var splFar = splAt(dMax);
+    if (splFar >= targetDb) {
+      return { distance_m: dMax, status: 'outside_map' };
+    }
+
+    var lo = dMin;
+    var hi = dMax;
+    // 48 iterations → sub-mm precision over km-scale domains
+    for (var i = 0; i < 48; i++) {
+      var mid = 0.5 * (lo + hi);
+      if (splAt(mid) >= targetDb) {
+        lo = mid; // still at/above target → search farther
+      } else {
+        hi = mid;
+      }
+    }
+
+    return { distance_m: 0.5 * (lo + hi), status: 'ok' };
+  }
+
   global.Acoustics = {
     ApplySuppressor: ApplySuppressor,
     SphericalSpreading: SphericalSpreading,
     Propagate: Propagate,
+    PropagateWithPeak: PropagateWithPeak,
+    DistanceToLevel: DistanceToLevel,
     // Exposed for validation / debugging
     _iso9613Alpha_dB_per_m: iso9613Alpha_dB_per_m,
-    _ApplyWind: ApplyWind
+    _ApplyWind: ApplyWind,
+    _peakFromBands: peakFromBands,
+    _continuousFromBands: continuousFromBands
   };
 })(typeof window !== 'undefined' ? window : globalThis);
