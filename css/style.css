@@ -352,6 +352,17 @@ body {
   color: var(--text);
 }
 
+
+.footer-osha {
+  margin-top: 0.55rem;
+  color: var(--text-muted);
+}
+
+.footer-osha strong {
+  color: var(--accent);
+  font-weight: 600;
+}
+
 .disclaimer {
   margin-top: 0.4rem;
   color: var(--danger);
