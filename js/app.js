@@ -8,8 +8,9 @@
  *
  * Phase 3: baked gun / suppressor profiles (GSP_PROFILES); bare vs suppressed
  * compare on map source toggle + dual OSHA columns. Suppressed path prefers
- * ApplySuppressor(muzzle, reduction_dB) when reduction is a measured pair;
- * otherwise Propagate(ml_dba) for measured suppressed level.
+ * ApplySuppressor(muzzle, reduction_dB) only when selected bare host matches
+ * the suppressor measurement host (bare_ref_id / host_key); otherwise
+ * Propagate(ml_dba) — never transplant another host reduction.
  */
 (function () {
   'use strict';
@@ -143,8 +144,8 @@
   /**
    * Resolve bare muzzle SPL + suppressed SPL.
    * - Bare: cited gun (Bare Muzzle) or manual Starting SPL.
-   * - Suppressed: ApplySuppressor(muzzle, reduction_dB) when reduction is a
-   *   measured pair (baked bare_ref − ml_dba); else measured ml_dba directly.
+   * - Suppressed: ApplySuppressor only on same-host measured pair
+   *   (bare_ref_id / host_key match); else Propagate(ml_dba) on mismatch.
    */
   function resolveSourceLevels() {
     var bareEl = document.getElementById('startingSPL');
@@ -163,18 +164,34 @@
 
     if (sup) {
       sourceNote = (sup.source_note || '') + (sup.reduction_note ? ' ' + sup.reduction_note : '');
-      if (sup.reduction_dB != null && isFinite(sup.reduction_dB)) {
+      // Only ApplySuppressor when selected bare host matches the suppressor measurement host.
+      var hostMatch =
+        !!gun &&
+        ((sup.bare_ref_id && gun.id === sup.bare_ref_id) ||
+          (sup.host_key && gun.host_key && gun.host_key === sup.host_key));
+      if (
+        hostMatch &&
+        sup.reduction_dB != null &&
+        isFinite(sup.reduction_dB)
+      ) {
         reduction_dB = Number(sup.reduction_dB);
         suppressedSPL = Acoustics.ApplySuppressor(bareSPL, reduction_dB);
         suppressedPath =
           'ApplySuppressor(muzzle ' + bareSPL.toFixed(2) + ', reduction ' +
           reduction_dB.toFixed(2) + ') → ' + suppressedSPL.toFixed(2) +
-          ' (measured-pair reduction; ml_dba=' + Number(sup.ml_dba).toFixed(2) + ')';
+          ' (same-host measured pair; ml_dba=' + Number(sup.ml_dba).toFixed(2) + ')';
       } else if (sup.ml_dba != null && isFinite(sup.ml_dba)) {
         suppressedSPL = Number(sup.ml_dba);
         reduction_dB = bareSPL - suppressedSPL;
-        suppressedPath =
-          'Propagate(ml_dba=' + suppressedSPL.toFixed(2) + ') — no baked bare_ref for this host; Δ vs bare shown only';
+        if (hostMatch) {
+          suppressedPath =
+            'Propagate(ml_dba=' + suppressedSPL.toFixed(2) +
+            ') — same host but no baked reduction_dB; using measured ml_dba';
+        } else {
+          suppressedPath =
+            'Propagate(ml_dba=' + suppressedSPL.toFixed(2) +
+            ') — host mismatch — using measured ml_dba (not ApplySuppressor with another host reduction)';
+        }
       }
     }
 
@@ -508,7 +525,7 @@
     if (levels.suppressedSPL != null && isFinite(levels.bareSPL)) {
       var d = levels.bareSPL - levels.suppressedSPL;
       deltaEl.textContent = d.toFixed(1) + ' dB' +
-        (levels.suppressor && levels.suppressor.reduction_dB != null ? ' (baked measured-pair reduction)' : ' (runtime Δ)');
+        (levels.suppressedPath && levels.suppressedPath.indexOf('same-host measured pair') >= 0 ? ' (same-host ApplySuppressor)' : (levels.suppressedPath && levels.suppressedPath.indexOf('host mismatch') >= 0 ? ' (host mismatch — ml_dba)' : ' (runtime Δ / ml_dba)'));
     } else {
       deltaEl.textContent = '—';
     }
