@@ -1657,6 +1657,11 @@
     if (btnMapBare) btnMapBare.addEventListener('click', function () { setMapSource('bare'); });
     if (btnMapSupp) btnMapSupp.addEventListener('click', function () { setMapSource('suppressed'); });
 
+    var toolsDrawer = document.querySelector('.tools-drawer');
+    if (toolsDrawer && window.matchMedia && window.matchMedia('(max-width: 800px)').matches) {
+      toolsDrawer.removeAttribute('open');
+    }
+
     var btnOshaBare = document.getElementById('btnOshaBare');
     var btnOshaSupp = document.getElementById('btnOshaSuppressed');
     if (btnOshaBare) btnOshaBare.addEventListener('click', function () { setOshaView('bare'); });

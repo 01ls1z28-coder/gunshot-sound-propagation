@@ -116,7 +116,9 @@
 
       <button type="button" class="btn btn-primary" id="btnGenerate">Generate Noise Map</button>
 
-      <p class="section-label">A / B scenarios</p>
+      <details class="tools-drawer" open>
+        <summary class="tools-drawer-summary">A/B scenarios &amp; CSV export</summary>
+      <p class="section-label tools-drawer-label">A / B scenarios</p>
       <div class="ab-panel" aria-label="Side-by-side scenario save">
         <p class="field-note">
           Save bare vs suppressed (or two wind setups) for session compare.
@@ -148,6 +150,7 @@
           Downloads distances for the active scenario; includes saved A/B rows when present.
         </p>
       </div>
+      </details>
 
       <div class="inline-legend" aria-label="SPL color legend">
         <p class="legend-heading">SPL Color Legend</p>
