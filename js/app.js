@@ -29,12 +29,12 @@
    * Distances are searched on continuous Propagate unless peakSearch is true.
    */
   var OSHA_LINES = [
-    { db: 85, label: '85 action', color: 'rgba(200, 255, 74, 0.95)', peakSearch: false },
-    { db: 90, label: '90 / 8 h', color: 'rgba(255, 196, 86, 0.92)', peakSearch: false },
-    { db: 95, label: '95 / 4 h', color: 'rgba(255, 168, 76, 0.9)', peakSearch: false },
-    { db: 100, label: '100 / 2 h', color: 'rgba(255, 120, 90, 0.9)', peakSearch: false },
-    { db: 105, label: '105 / 1 h', color: 'rgba(255, 90, 110, 0.9)', peakSearch: false },
-    { db: 115, label: '115 / ≤¼ h', color: 'rgba(255, 72, 120, 0.95)', peakSearch: false }
+    { db: 85, label: '85 · action', color: 'rgba(200, 255, 74, 0.95)', peakSearch: false },
+    { db: 90, label: '90 · 8 h', color: 'rgba(255, 196, 86, 0.92)', peakSearch: false },
+    { db: 95, label: '95 · 4 h', color: 'rgba(255, 168, 76, 0.9)', peakSearch: false },
+    { db: 100, label: '100 · 2 h', color: 'rgba(255, 120, 90, 0.9)', peakSearch: false },
+    { db: 105, label: '105 · 1 h', color: 'rgba(255, 90, 110, 0.9)', peakSearch: false },
+    { db: 115, label: '115 · ≤¼ h', color: 'rgba(255, 72, 120, 0.95)', peakSearch: false }
   ];
 
   /** OSHA 1910.95 impulsive/impact footnote: ≤140 dB peak SPL — table row only (not map contour). */
@@ -82,7 +82,7 @@
    */
   var RING_LABEL_ANGLE_RAD = 28 * Math.PI / 180;
   var OSHA_CHIP_TARGET_ANGLE_RAD = -38 * Math.PI / 180;
-  var LABEL_PAD = 3;
+  var LABEL_PAD = 10;
 
   var canvas = document.getElementById('noiseMap');
   var ctx = canvas.getContext('2d');
@@ -291,10 +291,10 @@
     var radius = Math.min(r, w / 2, h / 2);
     c.beginPath();
     c.moveTo(x + radius, y);
-    c.arcTo(x + w, y, x + w, y + h, radius);
-    c.arcTo(x + w, y + h, x, y + h, radius);
-    c.arcTo(x + w, y + h, x, y, radius);
-    c.arcTo(x, y, x + w, y, radius);
+    c.arcTo(x + w, y, x + w, y + h, radius); // top-right
+    c.arcTo(x + w, y + h, x, y + h, radius); // bottom-right
+    c.arcTo(x, y + h, x, y, radius); // bottom-left (was wrong: x+w,y+h → clipped left)
+    c.arcTo(x, y, x + w, y, radius); // top-left
     c.closePath();
   }
 
@@ -337,13 +337,14 @@
     c.font = font;
     c.textBaseline = 'middle';
     c.textAlign = 'left';
-    c.fillStyle = 'rgba(8, 10, 14, 0.94)';
-    c.strokeStyle = color;
-    c.lineWidth = 1;
-    roundRectPath(c, box.x, box.y, box.w, box.h, 3);
+    // Near-opaque dark fill (≥90%) + white/high-contrast text; accent border
+    c.fillStyle = 'rgba(8, 10, 14, 0.96)';
+    c.strokeStyle = color || 'rgba(255,255,255,0.55)';
+    c.lineWidth = 2;
+    roundRectPath(c, box.x, box.y, box.w, box.h, 4);
     c.fill();
     c.stroke();
-    c.fillStyle = color;
+    c.fillStyle = '#ffffff';
     c.fillText(text, box.x + box.padX, box.y + box.h / 2);
   }
 
@@ -462,8 +463,8 @@
       candidates.sort(function (a, b) { return b.score - a.score; });
 
       ctx.font = chipFont;
-      var padX = 5;
-      var boxH = 15;
+      var padX = 7;
+      var boxH = 17;
       var metrics = ctx.measureText(line.label);
       var boxW = metrics.width + padX * 2;
       var placed = false;
@@ -616,8 +617,8 @@
       if ((ringIndex - 1) % labelStride !== 0) continue;
 
       var txt = ringLabel(dist);
-      var padX = 4;
-      var boxH = 14;
+      var padX = 6;
+      var boxH = 16;
       var tw = ctx.measureText(txt).width;
       var boxW = tw + padX * 2;
       // Anchor just outside the ring along SE ray
@@ -631,7 +632,7 @@
         padX: padX
       }, side);
 
-      if (boxCollides(box, occupied, 2)) {
+      if (boxCollides(box, occupied, LABEL_PAD)) {
         // Try slight radial outward nudge, then skip label (keep curve)
         box = clampLabelBox({
           x: ax + 10 * cosR - boxW * 0.15,
@@ -640,16 +641,10 @@
           h: boxH,
           padX: padX
         }, side);
-        if (boxCollides(box, occupied, 2)) continue;
+        if (boxCollides(box, occupied, LABEL_PAD)) continue;
       }
 
-      ctx.fillStyle = 'rgba(8, 10, 14, 0.9)';
-      roundRectPath(ctx, box.x, box.y, box.w, box.h, 3);
-      ctx.fill();
-      ctx.fillStyle = 'rgba(255,255,255,0.95)';
-      ctx.textBaseline = 'middle';
-      ctx.textAlign = 'left';
-      ctx.fillText(txt, box.x + padX, box.y + boxH / 2);
+      drawOpaqueChip(ctx, box, txt, 'rgba(255,255,255,0.55)', '600 11px "Segoe UI", system-ui, sans-serif');
       occupied.push({ x: box.x, y: box.y, w: box.w, h: box.h });
     }
 
