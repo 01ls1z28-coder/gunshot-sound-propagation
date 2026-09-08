@@ -113,6 +113,39 @@
 
       <button type="button" class="btn btn-primary" id="btnGenerate">Generate Noise Map</button>
 
+      <p class="section-label">A / B scenarios</p>
+      <div class="ab-panel" aria-label="Side-by-side scenario save">
+        <p class="field-note">
+          Save bare vs suppressed (or two wind setups) for session compare.
+          Stored in <code>localStorage</code> only — no server.
+        </p>
+        <div class="ab-slots" id="abSlotsSummary">
+          <div class="ab-slot" data-slot="A">
+            <span class="ab-slot-tag">A</span>
+            <span class="ab-slot-body" id="abSlotA">empty</span>
+          </div>
+          <div class="ab-slot" data-slot="B">
+            <span class="ab-slot-tag">B</span>
+            <span class="ab-slot-body" id="abSlotB">empty</span>
+          </div>
+        </div>
+        <div class="ab-actions">
+          <button type="button" class="btn btn-secondary btn-compact" id="btnSaveA">Save → A</button>
+          <button type="button" class="btn btn-secondary btn-compact" id="btnSaveB">Save → B</button>
+          <button type="button" class="btn btn-secondary btn-compact" id="btnLoadA">Load A</button>
+          <button type="button" class="btn btn-secondary btn-compact" id="btnLoadB">Load B</button>
+          <button type="button" class="btn btn-secondary btn-compact" id="btnClearAB">Clear A/B</button>
+        </div>
+      </div>
+
+      <div class="export-panel" aria-label="CSV export">
+        <p class="section-label" style="margin-top:0.55rem">Export</p>
+        <button type="button" class="btn btn-secondary" id="btnExportCsv">Export OSHA / radial CSV</button>
+        <p class="field-note" id="exportNote">
+          Downloads distances for the active scenario; includes saved A/B rows when present.
+        </p>
+      </div>
+
       <div class="osha-distances" aria-label="Distance to OSHA levels">
         <p class="legend-heading">Distance to OSHA levels — Bare | Suppressed</p>
         <p class="osha-table-note" id="oshaTableNote">
@@ -227,6 +260,15 @@
       matches the suppressor’s measurement host (<code>bare_ref_id</code> / <code>host_key</code>);
       otherwise suppressed uses measured <code>ml_dba</code> (host mismatch — no transplanted reduction).
       Estimates labeled; not lab-certified hearing-safety ratings.
+    </p>
+    <p class="footer-phase4">
+      <strong>Phase 4 — map labels, A/B, CSV:</strong>
+      Distance-ring labels and OSHA contour chips use staggered polar anchors
+      (rings SE of east, chips NE) with opaque backs and overlap skip so stacked
+      numbers on the same ray stay readable. A/B scenario slots store full setups
+      (bare vs suppressed and/or wind) in <code>localStorage</code> for side-by-side
+      session compare. CSV export dumps radial ring samples and OSHA ray distances
+      for the active scenario and any saved A/B slots — no fetch/DB.
     </p>
     <p class="disclaimer">
       Disclaimer: values are compiled engineering estimates for visualization and education —

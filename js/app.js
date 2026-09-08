@@ -11,6 +11,10 @@
  * ApplySuppressor(muzzle, reduction_dB) only when selected bare host matches
  * the suppressor measurement host (bare_ref_id / host_key); otherwise
  * Propagate(ml_dba) — never transplant another host reduction.
+ *
+ * Phase 4: stagger distance-ring vs OSHA chip anchors (no same-ray stack),
+ * opaque chip/backs + overlap skip; A/B localStorage scenarios; CSV export
+ * of radial / OSHA distances for active (+ saved A/B) scenarios.
  */
 (function () {
   'use strict';
@@ -65,6 +69,20 @@
   var lastInputs = null;
   var distanceUpdateTimer = null;
   var listFilterTimer = null;
+
+  /** Phase 4 — session A/B scenario slots (localStorage). */
+  var AB_STORAGE_KEY = 'gsp_phase4_scenarios_v1';
+  /** @type {{A: object|null, B: object|null}} */
+  var abSlots = { A: null, B: null };
+
+  /**
+   * Polar stagger so ring labels and OSHA chips never share the east mid-ray
+   * (Jorge snip: "50 m" / "100 m" under "2 h" / "4 h" chips).
+   * Canvas +y is down: +angle = SE (below east), −angle = NE (above east).
+   */
+  var RING_LABEL_ANGLE_RAD = 28 * Math.PI / 180;
+  var OSHA_CHIP_TARGET_ANGLE_RAD = -38 * Math.PI / 180;
+  var LABEL_PAD = 3;
 
   var canvas = document.getElementById('noiseMap');
   var ctx = canvas.getContext('2d');
@@ -290,13 +308,62 @@
    * Marching-squares iso-contours on the continuous SPL grid, stroked in canvas pixels.
    * Grid index: data[x * size + y] (same as heatmap).
    */
-  function drawOshaContours(pack, side) {
+  function boxesOverlap(a, b, pad) {
+    var p = pad == null ? LABEL_PAD : pad;
+    return !(
+      a.x + a.w + p <= b.x ||
+      b.x + b.w + p <= a.x ||
+      a.y + a.h + p <= b.y ||
+      b.y + b.h + p <= a.y
+    );
+  }
+
+  function boxCollides(box, occupied, pad) {
+    for (var i = 0; i < occupied.length; i++) {
+      if (boxesOverlap(box, occupied[i], pad)) return true;
+    }
+    return false;
+  }
+
+  function clampLabelBox(box, side) {
+    if (box.x < 2) box.x = 2;
+    if (box.y < 2) box.y = 2;
+    if (box.x + box.w > side - 2) box.x = Math.max(2, side - 2 - box.w);
+    if (box.y + box.h > side - 2) box.y = Math.max(2, side - 2 - box.h);
+    return box;
+  }
+
+  function drawOpaqueChip(c, box, text, color, font) {
+    c.font = font;
+    c.textBaseline = 'middle';
+    c.textAlign = 'left';
+    c.fillStyle = 'rgba(8, 10, 14, 0.94)';
+    c.strokeStyle = color;
+    c.lineWidth = 1;
+    roundRectPath(c, box.x, box.y, box.w, box.h, 3);
+    c.fill();
+    c.stroke();
+    c.fillStyle = color;
+    c.fillText(text, box.x + box.padX, box.y + box.h / 2);
+  }
+
+  /**
+   * Marching-squares iso-contours on the continuous SPL grid, stroked in canvas pixels.
+   * Grid index: data[x * size + y] (same as heatmap).
+   * Labels prefer NE of east (staggered vs SE ring labels); skip if overlap.
+   * Contour curves always drawn; chips may be thinned when crowded.
+   */
+  function drawOshaContours(pack, side, occupied) {
     var data = pack.data;
     var size = pack.size;
     if (!data || size < 2) return;
+    if (!occupied) occupied = [];
 
     var scale = side / size;
     var segmentsByLevel = [];
+    var centerG = size * 0.5;
+    // Base NE target; per-level angular fan so chips do not stack on one another
+    var targetAngBase = OSHA_CHIP_TARGET_ANGLE_RAD;
 
     for (var li = 0; li < OSHA_LINES.length; li++) {
       var level = OSHA_LINES[li].db;
@@ -307,7 +374,7 @@
           var v00 = data[x * size + y];
           var v10 = data[(x + 1) * size + y];
           var v11 = data[(x + 1) * size + (y + 1)];
-          var v01 = data[x * size + (y + 1)];
+          var v01 = data[x * size + y + 1];
 
           var b0 = v00 >= level ? 1 : 0;
           var b1 = v10 >= level ? 2 : 0;
@@ -316,7 +383,6 @@
           var caseId = b0 | b1 | b2 | b3;
           if (caseId === 0 || caseId === 15) continue;
 
-          // Edge crossings in grid space (linear interp along edges)
           var tx = x + isoFrac(v00, v10, level);
           var ty = y;
           var rx = x + 1;
@@ -326,7 +392,6 @@
           var lx = x;
           var ly = y + isoFrac(v00, v01, level);
 
-          // Standard marching-squares edge pairs (ambiguous 5/10: consistent diagonal)
           switch (caseId) {
             case 1: case 14:
               segs.push(lx, ly, tx, ty); break;
@@ -352,6 +417,8 @@
       segmentsByLevel.push(segs);
     }
 
+    var chipFont = '600 10px "Segoe UI", system-ui, sans-serif';
+
     for (var i = 0; i < OSHA_LINES.length; i++) {
       var line = OSHA_LINES[i];
       var segs2 = segmentsByLevel[i];
@@ -363,9 +430,11 @@
       ctx.setLineDash([5, 4]);
       ctx.beginPath();
 
-      var labelGx = null;
-      var labelGy = null;
-      var bestScore = -Infinity;
+      // Fan NE targets: alternate slightly so neighboring level chips clear each other
+      var targetAng = targetAngBase + ((i % 3) - 1) * (10 * Math.PI / 180);
+
+      // Collect candidate midpoints with score toward NE target angle (+radial offset)
+      var candidates = [];
 
       for (var s = 0; s < segs2.length; s += 4) {
         var x0 = segs2[s] * scale;
@@ -375,44 +444,71 @@
         ctx.moveTo(x0, y0);
         ctx.lineTo(x1, y1);
 
-        // Prefer a label anchor toward the east (+x) mid-height for readability
         var mx = (segs2[s] + segs2[s + 2]) * 0.5;
         var my = (segs2[s + 1] + segs2[s + 3]) * 0.5;
-        var score = mx - Math.abs(my - size * 0.5) * 0.35;
-        if (score > bestScore) {
-          bestScore = score;
-          labelGx = mx;
-          labelGy = my;
-        }
+        var dx = mx - centerG;
+        var dy = my - centerG;
+        var ang = Math.atan2(dy, dx);
+        var dang = ang - targetAng;
+        while (dang > Math.PI) dang -= 2 * Math.PI;
+        while (dang < -Math.PI) dang += 2 * Math.PI;
+        // Prefer NE ray; slight preference for east half so chips stay readable
+        var score = -Math.abs(dang) * 4 + (dx > 0 ? 0.35 : -0.5);
+        candidates.push({ gx: mx, gy: my, score: score });
       }
       ctx.stroke();
       ctx.setLineDash([]);
 
-      if (labelGx != null) {
-        var lx = labelGx * scale;
-        var ly = labelGy * scale;
-        ctx.font = '600 10px "Segoe UI", system-ui, sans-serif';
-        ctx.textBaseline = 'middle';
-        ctx.textAlign = 'left';
-        var padX = 5;
-        var boxH = 14;
-        var metrics = ctx.measureText(line.label);
-        var boxW = metrics.width + padX * 2;
-        var boxX = lx + 4;
-        var boxY = ly - boxH / 2;
-        if (boxX + boxW > side - 2) boxX = lx - boxW - 4;
-        if (boxY < 2) boxY = 2;
-        if (boxY + boxH > side - 2) boxY = side - boxH - 2;
+      candidates.sort(function (a, b) { return b.score - a.score; });
 
-        ctx.fillStyle = 'rgba(8, 10, 14, 0.82)';
-        ctx.strokeStyle = line.color;
-        ctx.lineWidth = 1;
-        roundRectPath(ctx, boxX, boxY, boxW, boxH, 3);
-        ctx.fill();
-        ctx.stroke();
-        ctx.fillStyle = line.color;
-        ctx.fillText(line.label, boxX + padX, boxY + boxH / 2);
+      ctx.font = chipFont;
+      var padX = 5;
+      var boxH = 15;
+      var metrics = ctx.measureText(line.label);
+      var boxW = metrics.width + padX * 2;
+      var placed = false;
+      // Radial nudge options (px along outward normal from center) to clear rings
+      var nudges = [0, 10, -10, 18, -18, 28];
+
+      for (var ci = 0; ci < candidates.length && !placed; ci++) {
+        // Try top few angle-matched candidates only (thin labels when crowded)
+        if (ci > 14) break;
+        var cand = candidates[ci];
+        var lx = cand.gx * scale;
+        var ly = cand.gy * scale;
+        var cdx = lx - side * 0.5;
+        var cdy = ly - side * 0.5;
+        var clen = Math.sqrt(cdx * cdx + cdy * cdy) || 1;
+        var ux = cdx / clen;
+        var uy = cdy / clen;
+
+        for (var ni = 0; ni < nudges.length; ni++) {
+          var nx = lx + ux * nudges[ni];
+          var ny = ly + uy * nudges[ni];
+          // Alternate left/right of contour tangent-ish: place chip outside curve
+          var boxX = nx + 4;
+          var boxY = ny - boxH / 2;
+          // Prefer chip sitting "above" the contour point on NE (negative y bias)
+          if (OSHA_CHIP_TARGET_ANGLE_RAD < 0) boxY = ny - boxH - 2;
+
+          var box = clampLabelBox({
+            x: boxX, y: boxY, w: boxW, h: boxH, padX: padX
+          }, side);
+          // Also try mirrored horizontal if edge-clamped
+          if (boxCollides(box, occupied, LABEL_PAD)) {
+            box = clampLabelBox({
+              x: nx - boxW - 4, y: boxY, w: boxW, h: boxH, padX: padX
+            }, side);
+          }
+          if (boxCollides(box, occupied, LABEL_PAD)) continue;
+
+          drawOpaqueChip(ctx, box, line.label, line.color, chipFont);
+          occupied.push({ x: box.x, y: box.y, w: box.w, h: box.h });
+          placed = true;
+          break;
+        }
       }
+      // If nothing fits, skip chip (curve remains) — readability > completeness
       ctx.restore();
     }
 
@@ -426,11 +522,13 @@
     var noteY = side - 8;
     var nw = ctx.measureText(note).width + 10;
     var nh = 16;
-    ctx.fillStyle = 'rgba(8, 10, 14, 0.78)';
-    roundRectPath(ctx, noteX - nw, noteY - nh, nw, nh, 3);
+    var noteBox = { x: noteX - nw, y: noteY - nh, w: nw, h: nh };
+    ctx.fillStyle = 'rgba(8, 10, 14, 0.9)';
+    roundRectPath(ctx, noteBox.x, noteBox.y, noteBox.w, noteBox.h, 3);
     ctx.fill();
     ctx.fillStyle = 'rgba(255, 143, 163, 0.95)';
     ctx.fillText(note, noteX - 5, noteY - 3);
+    occupied.push(noteBox);
     ctx.restore();
   }
 
@@ -476,13 +574,17 @@
     ctx.clearRect(0, 0, side, side);
     ctx.drawImage(off, 0, 0, side, side);
 
-    // Distance rings — step in display units, convert to meters for geometry
+    // Distance rings — curves full circle; labels on SE ray (stagger vs OSHA NE chips)
     var centerPx = side / 2;
     var pxPerM = side / (maxDistance * 2);
+    var occupied = [];
+    var ringAng = RING_LABEL_ANGLE_RAD;
+    var cosR = Math.cos(ringAng);
+    var sinR = Math.sin(ringAng);
+
     ctx.strokeStyle = 'rgba(255,255,255,0.55)';
-    ctx.fillStyle = 'rgba(255,255,255,0.85)';
     ctx.lineWidth = 1;
-    ctx.font = '12px "Segoe UI", system-ui, sans-serif';
+    ctx.font = '600 11px "Segoe UI", system-ui, sans-serif';
 
     var ringStepM;
     var ringLabel;
@@ -494,17 +596,65 @@
       ringLabel = function (m) { return Math.round(m / M_PER_FT) + ' ft'; };
     }
 
+    // Estimate label stride: thin every-other ring when canvas is cramped
+    var maxLabeledR = side * 0.55;
+    var approxCount = 0;
+    for (var d0 = ringStepM; d0 <= maxDistance * 2; d0 += ringStepM) {
+      if (d0 * pxPerM <= maxLabeledR) approxCount++;
+    }
+    var labelStride = approxCount > 8 ? 2 : 1;
+    var ringIndex = 0;
+
     for (var dist = ringStepM; dist <= maxDistance * 2; dist += ringStepM) {
       var radiusPx = dist * pxPerM;
-      if (radiusPx > side * 0.55) continue; // keep labels readable
       ctx.beginPath();
       ctx.arc(centerPx, centerPx, radiusPx, 0, Math.PI * 2);
       ctx.stroke();
-      ctx.fillText(ringLabel(dist), centerPx + radiusPx + 6, centerPx + 4);
+
+      if (radiusPx > maxLabeledR) continue;
+      ringIndex++;
+      if ((ringIndex - 1) % labelStride !== 0) continue;
+
+      var txt = ringLabel(dist);
+      var padX = 4;
+      var boxH = 14;
+      var tw = ctx.measureText(txt).width;
+      var boxW = tw + padX * 2;
+      // Anchor just outside the ring along SE ray
+      var ax = centerPx + (radiusPx + 8) * cosR;
+      var ay = centerPx + (radiusPx + 8) * sinR;
+      var box = clampLabelBox({
+        x: ax - boxW * 0.15,
+        y: ay - boxH / 2,
+        w: boxW,
+        h: boxH,
+        padX: padX
+      }, side);
+
+      if (boxCollides(box, occupied, 2)) {
+        // Try slight radial outward nudge, then skip label (keep curve)
+        box = clampLabelBox({
+          x: ax + 10 * cosR - boxW * 0.15,
+          y: ay + 10 * sinR - boxH / 2,
+          w: boxW,
+          h: boxH,
+          padX: padX
+        }, side);
+        if (boxCollides(box, occupied, 2)) continue;
+      }
+
+      ctx.fillStyle = 'rgba(8, 10, 14, 0.9)';
+      roundRectPath(ctx, box.x, box.y, box.w, box.h, 3);
+      ctx.fill();
+      ctx.fillStyle = 'rgba(255,255,255,0.95)';
+      ctx.textBaseline = 'middle';
+      ctx.textAlign = 'left';
+      ctx.fillText(txt, box.x + padX, box.y + boxH / 2);
+      occupied.push({ x: box.x, y: box.y, w: box.w, h: box.h });
     }
 
     // OSHA iso-contours follow the continuous SPL field (wind may distort circles)
-    drawOshaContours(pack, side);
+    drawOshaContours(pack, side, occupied);
 
     // Source marker
     ctx.fillStyle = '#fff';
@@ -703,6 +853,431 @@
       lastInputs = inp;
       updateOshaDistanceTable(inp);
     }, 120);
+  }
+
+  /* ——— Phase 4: A/B localStorage scenarios + CSV export ——— */
+
+  function loadAbFromStorage() {
+    abSlots = { A: null, B: null };
+    try {
+      var raw = localStorage.getItem(AB_STORAGE_KEY);
+      if (!raw) return;
+      var parsed = JSON.parse(raw);
+      if (parsed && typeof parsed === 'object') {
+        abSlots.A = parsed.A || null;
+        abSlots.B = parsed.B || null;
+      }
+    } catch (err) {
+      abSlots = { A: null, B: null };
+    }
+  }
+
+  function persistAbSlots() {
+    try {
+      localStorage.setItem(AB_STORAGE_KEY, JSON.stringify(abSlots));
+    } catch (err) {
+      /* quota / private mode — ignore */
+    }
+  }
+
+  function snapshotScenario(nameHint) {
+    var levels = resolveSourceLevels();
+    var env = envFromForm();
+    var windDeg = parseOrDefault(document.getElementById('windDir').value, 0);
+    var sup = selectedSuppressorId ? findSuppressorById(selectedSuppressorId) : null;
+    var bare = selectedBareId !== 'custom' ? findBareById(selectedBareId) : null;
+    var label =
+      (mapSource === 'suppressed' ? 'Suppressed' : 'Bare') +
+      (sup ? ' · ' + (sup.manufacturer || '') + ' ' + (sup.model || '') : '') +
+      ' · wind ' + (units === 'metric'
+        ? env.windSpeed_mps.toFixed(1) + ' m/s'
+        : (env.windSpeed_mps / MPS_PER_MPH).toFixed(1) + ' mph') +
+      '@' + Math.round(windDeg) + '°';
+
+    return {
+      savedAt: new Date().toISOString(),
+      name: nameHint || label,
+      units: units,
+      mapSource: mapSource,
+      selectedBareId: selectedBareId,
+      selectedSuppressorId: selectedSuppressorId,
+      form: {
+        startingSPL: document.getElementById('startingSPL').value,
+        maxDistance: document.getElementById('maxDistance').value,
+        tempC: document.getElementById('tempC').value,
+        humidity: document.getElementById('humidity').value,
+        terrain: document.getElementById('terrain').value,
+        windSpeed: document.getElementById('windSpeed').value,
+        windDir: document.getElementById('windDir').value,
+        caliberFilter: (document.getElementById('caliberFilter') || {}).value || '',
+        suppressorSearch: (document.getElementById('suppressorSearch') || {}).value || ''
+      },
+      levels: {
+        bareSPL: levels.bareSPL,
+        suppressedSPL: levels.suppressedSPL,
+        bareSource: levels.bareSource,
+        suppressedPath: levels.suppressedPath,
+        reduction_dB: levels.reduction_dB
+      },
+      env: {
+        maxDistance_m: env.maxDistance_m,
+        tempC: env.tempC,
+        humidityPct: env.humidityPct,
+        terrain: env.terrain,
+        windSpeed_mps: env.windSpeed_mps,
+        windDirRad: env.windDirRad,
+        windDirDeg: windDeg
+      },
+      bareName: bare ? bare.name : 'Custom / manual',
+      suppressorName: sup
+        ? ((sup.manufacturer || '') + ' ' + (sup.model || '')).trim()
+        : null
+    };
+  }
+
+  function formatAbSlotSummary(slot) {
+    if (!slot) return 'empty';
+    var bare = slot.levels && slot.levels.bareSPL != null
+      ? Number(slot.levels.bareSPL).toFixed(1) + ' dB'
+      : '—';
+    var supp = slot.levels && slot.levels.suppressedSPL != null
+      ? Number(slot.levels.suppressedSPL).toFixed(1) + ' dB'
+      : '—';
+    var wind = slot.env
+      ? (slot.units === 'imperial'
+          ? (slot.env.windSpeed_mps / MPS_PER_MPH).toFixed(1) + ' mph'
+          : slot.env.windSpeed_mps.toFixed(1) + ' m/s') +
+        ' @ ' + Math.round(slot.env.windDirDeg || 0) + '°'
+      : '—';
+    return (
+      '<strong>' + (slot.mapSource || '?') + '</strong> · bare ' + bare +
+      ' · supp ' + supp + '<br>wind ' + wind +
+      (slot.suppressorName ? '<br>' + slot.suppressorName : '')
+    );
+  }
+
+  function refreshAbUi() {
+    var elA = document.getElementById('abSlotA');
+    var elB = document.getElementById('abSlotB');
+    if (elA) {
+      elA.innerHTML = formatAbSlotSummary(abSlots.A);
+      elA.classList.toggle('is-filled', !!abSlots.A);
+    }
+    if (elB) {
+      elB.innerHTML = formatAbSlotSummary(abSlots.B);
+      elB.classList.toggle('is-filled', !!abSlots.B);
+    }
+  }
+
+  function saveScenarioSlot(which) {
+    var snap = snapshotScenario(which);
+    abSlots[which] = snap;
+    persistAbSlots();
+    refreshAbUi();
+  }
+
+  function applyScenarioSlot(which) {
+    var snap = abSlots[which];
+    if (!snap || !snap.form) return;
+
+    // Units first so displayed values match the snapshot's unit system
+    if (snap.units && snap.units !== units) {
+      // setUnits converts current values — set raw after instead
+      units = snap.units;
+      updateUnitLabels();
+      var btnM = document.getElementById('btnMetric');
+      var btnI = document.getElementById('btnImperial');
+      if (btnM && btnI) {
+        btnM.classList.toggle('is-active', units === 'metric');
+        btnI.classList.toggle('is-active', units === 'imperial');
+        btnM.setAttribute('aria-pressed', units === 'metric' ? 'true' : 'false');
+        btnI.setAttribute('aria-pressed', units === 'imperial' ? 'true' : 'false');
+      }
+    }
+
+    var f = snap.form;
+    function setVal(id, v) {
+      var el = document.getElementById(id);
+      if (el && v != null) el.value = v;
+    }
+    setVal('startingSPL', f.startingSPL);
+    setVal('maxDistance', f.maxDistance);
+    setVal('tempC', f.tempC);
+    setVal('humidity', f.humidity);
+    setVal('terrain', f.terrain);
+    setVal('windSpeed', f.windSpeed);
+    setVal('windDir', f.windDir);
+    setVal('caliberFilter', f.caliberFilter);
+    setVal('suppressorSearch', f.suppressorSearch);
+
+    selectedBareId = snap.selectedBareId || 'custom';
+    selectedSuppressorId = snap.selectedSuppressorId || null;
+
+    var pref = null;
+    var sup = selectedSuppressorId ? findSuppressorById(selectedSuppressorId) : null;
+    if (sup) pref = sup.host_key;
+    populateBareHosts(pref);
+    var bareSel = document.getElementById('bareHost');
+    if (bareSel) bareSel.value = selectedBareId;
+    applyBareSelection(false);
+    // Restore exact Starting SPL from snapshot (applyBareSelection may overwrite cited guns)
+    setVal('startingSPL', f.startingSPL);
+    if (selectedBareId === 'custom') {
+      var splEl = document.getElementById('startingSPL');
+      if (splEl) {
+        splEl.readOnly = false;
+        splEl.title = 'Custom / manual Starting SPL override';
+      }
+    }
+    renderSuppressorList();
+
+    // Map source without auto-generate (we'll generate once)
+    mapSource = snap.mapSource === 'suppressed' ? 'suppressed' : 'bare';
+    var btnB = document.getElementById('btnMapBare');
+    var btnS = document.getElementById('btnMapSuppressed');
+    if (btnB && btnS) {
+      btnB.classList.toggle('is-active', mapSource === 'bare');
+      btnS.classList.toggle('is-active', mapSource === 'suppressed');
+      btnB.setAttribute('aria-pressed', mapSource === 'bare' ? 'true' : 'false');
+      btnS.setAttribute('aria-pressed', mapSource === 'suppressed' ? 'true' : 'false');
+    }
+
+    refreshAbUi();
+    generateNoiseMap();
+  }
+
+  function clearAbSlots() {
+    abSlots = { A: null, B: null };
+    persistAbSlots();
+    refreshAbUi();
+  }
+
+  function csvEscape(val) {
+    var s = val == null ? '' : String(val);
+    if (/[",\n\r]/.test(s)) return '"' + s.replace(/"/g, '""') + '"';
+    return s;
+  }
+
+  function distCsvCell(result) {
+    if (!result) return { m: '', status: 'n/a', display: '' };
+    if (result.status === 'outside_map') {
+      return { m: '', status: 'beyond_max', display: 'beyond max distance' };
+    }
+    if (result.status === 'below_near') {
+      return {
+        m: result.distance_m != null ? Number(result.distance_m).toFixed(3) : '',
+        status: 'below_near',
+        display: formatDist(result.distance_m)
+      };
+    }
+    return {
+      m: result.distance_m != null ? Number(result.distance_m).toFixed(3) : '',
+      status: result.status || 'ok',
+      display: formatDist(result.distance_m)
+    };
+  }
+
+  function collectOshaRowsForScenario(tag, bareSPL, suppressedSPL, env) {
+    var windDir = env.windDirRad;
+    var rays = {
+      down: windDir,
+      up: windDir + Math.PI,
+      cross: windDir + Math.PI / 2
+    };
+    var rows = OSHA_LINES.concat([OSHA_PEAK_LINE]);
+    var out = [];
+    var rayNames = ['down', 'up', 'cross'];
+    for (var i = 0; i < rows.length; i++) {
+      var row = rows[i];
+      var usePeak = !!row.peakSearch;
+      for (var ri = 0; ri < rayNames.length; ri++) {
+        var rn = rayNames[ri];
+        var b = searchDistance(row.db, rays[rn], bareSPL, env, usePeak);
+        var s = searchDistance(row.db, rays[rn], suppressedSPL, env, usePeak);
+        var bc = distCsvCell(b);
+        var sc = distCsvCell(s);
+        out.push({
+          scenario: tag,
+          kind: 'osha',
+          level_db: row.db,
+          level_label: row.label,
+          peak_search: usePeak ? 'yes' : 'no',
+          ray: rn,
+          series: 'bare',
+          distance_m: bc.m,
+          distance_display: bc.display,
+          status: bc.status
+        });
+        out.push({
+          scenario: tag,
+          kind: 'osha',
+          level_db: row.db,
+          level_label: row.label,
+          peak_search: usePeak ? 'yes' : 'no',
+          ray: rn,
+          series: 'suppressed',
+          distance_m: sc.m,
+          distance_display: sc.display,
+          status: sc.status
+        });
+      }
+    }
+    return out;
+  }
+
+  function collectRadialRowsForScenario(tag, bareSPL, suppressedSPL, env) {
+    var ringStepM = 50;
+    var windDir = env.windDirRad;
+    var rays = {
+      down: windDir,
+      up: windDir + Math.PI,
+      cross: windDir + Math.PI / 2
+    };
+    var out = [];
+    var rayNames = ['down', 'up', 'cross'];
+    for (var dist = ringStepM; dist <= env.maxDistance_m; dist += ringStepM) {
+      for (var ri = 0; ri < rayNames.length; ri++) {
+        var rn = rayNames[ri];
+        var ang = rays[rn];
+        function splAt(muzzle) {
+          if (muzzle == null || !isFinite(muzzle)) return null;
+          return Acoustics.Propagate(
+            muzzle, dist, env.tempC, env.humidityPct, env.terrain,
+            false, env.windSpeed_mps, env.windDirRad, ang
+          );
+        }
+        var bareSpl = splAt(bareSPL);
+        var suppSpl = splAt(suppressedSPL);
+        out.push({
+          scenario: tag,
+          kind: 'radial',
+          level_db: '',
+          level_label: 'ring',
+          peak_search: 'no',
+          ray: rn,
+          series: 'bare',
+          distance_m: dist.toFixed(3),
+          distance_display: formatDist(dist),
+          status: bareSpl == null ? 'n/a' : ('spl_db=' + bareSpl.toFixed(2))
+        });
+        out.push({
+          scenario: tag,
+          kind: 'radial',
+          level_db: '',
+          level_label: 'ring',
+          peak_search: 'no',
+          ray: rn,
+          series: 'suppressed',
+          distance_m: dist.toFixed(3),
+          distance_display: formatDist(dist),
+          status: suppSpl == null ? 'n/a' : ('spl_db=' + suppSpl.toFixed(2))
+        });
+      }
+    }
+    return out;
+  }
+
+  function scenarioEnvFromSnap(snap) {
+    if (!snap || !snap.env) return null;
+    return {
+      maxDistance_m: snap.env.maxDistance_m,
+      tempC: snap.env.tempC,
+      humidityPct: snap.env.humidityPct,
+      terrain: snap.env.terrain,
+      windSpeed_mps: snap.env.windSpeed_mps,
+      windDirRad: snap.env.windDirRad
+    };
+  }
+
+  function buildExportRows() {
+    var rows = [];
+    var inp = readInputsAsSI();
+    var env = {
+      maxDistance_m: inp.maxDistance_m,
+      tempC: inp.tempC,
+      humidityPct: inp.humidityPct,
+      terrain: inp.terrain,
+      windSpeed_mps: inp.windSpeed_mps,
+      windDirRad: inp.windDirRad
+    };
+    rows = rows.concat(
+      collectOshaRowsForScenario('active', inp.bareSPL, inp.suppressedSPL, env)
+    );
+    rows = rows.concat(
+      collectRadialRowsForScenario('active', inp.bareSPL, inp.suppressedSPL, env)
+    );
+
+    ['A', 'B'].forEach(function (key) {
+      var snap = abSlots[key];
+      if (!snap) return;
+      var e = scenarioEnvFromSnap(snap);
+      if (!e) return;
+      var bare = snap.levels ? snap.levels.bareSPL : null;
+      var supp = snap.levels ? snap.levels.suppressedSPL : null;
+      var tag = 'slot_' + key;
+      rows = rows.concat(collectOshaRowsForScenario(tag, bare, supp, e));
+      rows = rows.concat(collectRadialRowsForScenario(tag, bare, supp, e));
+    });
+    return rows;
+  }
+
+  function exportDistancesCsv() {
+    var rows = buildExportRows();
+    var header = [
+      'scenario', 'kind', 'level_db', 'level_label', 'peak_search',
+      'ray', 'series', 'distance_m', 'distance_display', 'status'
+    ];
+    var lines = [header.join(',')];
+    for (var i = 0; i < rows.length; i++) {
+      var r = rows[i];
+      lines.push([
+        csvEscape(r.scenario),
+        csvEscape(r.kind),
+        csvEscape(r.level_db),
+        csvEscape(r.level_label),
+        csvEscape(r.peak_search),
+        csvEscape(r.ray),
+        csvEscape(r.series),
+        csvEscape(r.distance_m),
+        csvEscape(r.distance_display),
+        csvEscape(r.status)
+      ].join(','));
+    }
+    var blob = new Blob([lines.join('\n')], { type: 'text/csv;charset=utf-8' });
+    var url = URL.createObjectURL(blob);
+    var a = document.createElement('a');
+    var stamp = new Date().toISOString().replace(/[:.]/g, '-').slice(0, 19);
+    a.href = url;
+    a.download = 'gsp-osha-radial-' + stamp + '.csv';
+    document.body.appendChild(a);
+    a.click();
+    document.body.removeChild(a);
+    setTimeout(function () { URL.revokeObjectURL(url); }, 1500);
+    var note = document.getElementById('exportNote');
+    if (note) {
+      var nScen = 1 + (abSlots.A ? 1 : 0) + (abSlots.B ? 1 : 0);
+      note.textContent =
+        'Exported ' + rows.length + ' rows (' + nScen +
+        ' scenario' + (nScen > 1 ? 's' : '') +
+        ': active' + (abSlots.A ? '+A' : '') + (abSlots.B ? '+B' : '') + ').';
+    }
+  }
+
+  function wirePhase4Ui() {
+    loadAbFromStorage();
+    refreshAbUi();
+    var map = [
+      ['btnSaveA', function () { saveScenarioSlot('A'); }],
+      ['btnSaveB', function () { saveScenarioSlot('B'); }],
+      ['btnLoadA', function () { applyScenarioSlot('A'); }],
+      ['btnLoadB', function () { applyScenarioSlot('B'); }],
+      ['btnClearAB', clearAbSlots],
+      ['btnExportCsv', exportDistancesCsv]
+    ];
+    for (var i = 0; i < map.length; i++) {
+      var el = document.getElementById(map[i][0]);
+      if (el) el.addEventListener('click', map[i][1]);
+    }
   }
 
   function blankReadout() {
@@ -1098,6 +1673,7 @@
 
   updateUnitLabels();
   wireProfilesUi();
+  wirePhase4Ui();
   updateCompareSummary(resolveSourceLevels());
 
   requestAnimationFrame(function () {

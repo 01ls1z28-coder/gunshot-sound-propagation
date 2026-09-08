@@ -52,6 +52,13 @@ Bare Muzzle rows or Custom Starting SPL; suppressed uses
 `ApplySuppressor(muzzle, reduction_dB)` before `Propagate` when reduction is a
 measured pair (`bare_ref − ml_dba`), else `Propagate(ml_dba)`.
 
+
+## Phase 4 — labels, A/B, CSV
+
+- **Map labels:** distance-ring chips sit on a SE polar ray; OSHA contour chips prefer NE anchors with opaque backs and overlap skip (curves always drawn). Fixes the same-ray stack seen when ring meters sat under OSHA duration chips.
+- **A/B scenarios:** Save → A / Save → B stores the full setup (profiles, map source, env/wind, units) in `localStorage` for bare-vs-suppressed or two-wind compare; Load A/B restores and regenerates.
+- **Export:** “Export OSHA / radial CSV” downloads ray distances (OSHA table + radial ring SPL samples) for the active scenario and any saved A/B slots. No server/fetch/DB.
+
 ## Disclaimer
 
 Compiled engineering estimates for visualization and education — **not** laboratory-certified hearing-protection or regulatory numbers.
