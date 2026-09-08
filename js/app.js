@@ -58,6 +58,8 @@
   var selectedBareId = 'custom';
   /** @type {'bare'|'suppressed'} */
   var mapSource = 'bare';
+  /** @type {'bare'|'suppressed'} OSHA distance table tab */
+  var oshaView = 'bare';
 
   var lastGrid = null;
   var cellSize_m = 1.0;
@@ -790,7 +792,7 @@
     return { distance_m: 0.5 * (lo + hi), status: 'ok' };
   }
 
-  /** Live distance-to-OSHA table: Bare | Suppressed × down / up / cross. */
+  /** Live distance-to-OSHA table: one source at a time (Bare | Suppressed tabs). */
   function updateOshaDistanceTable(inp) {
     if (!oshaDistanceBody || !inp) return;
 
@@ -812,32 +814,43 @@
       windDirRad: inp.windDirRad
     };
 
+    var sourceSPL = oshaView === 'suppressed' ? inp.suppressedSPL : inp.bareSPL;
     var rows = OSHA_LINES.concat([OSHA_PEAK_LINE]);
     var html = '';
 
     for (var i = 0; i < rows.length; i++) {
       var row = rows[i];
       var usePeak = !!row.peakSearch;
-      var bDown = searchDistance(row.db, rays.down, inp.bareSPL, env, usePeak);
-      var bUp = searchDistance(row.db, rays.up, inp.bareSPL, env, usePeak);
-      var bCross = searchDistance(row.db, rays.cross, inp.bareSPL, env, usePeak);
-      var sDown = searchDistance(row.db, rays.down, inp.suppressedSPL, env, usePeak);
-      var sUp = searchDistance(row.db, rays.up, inp.suppressedSPL, env, usePeak);
-      var sCross = searchDistance(row.db, rays.cross, inp.suppressedSPL, env, usePeak);
+      var dDown = searchDistance(row.db, rays.down, sourceSPL, env, usePeak);
+      var dUp = searchDistance(row.db, rays.up, sourceSPL, env, usePeak);
+      var dCross = searchDistance(row.db, rays.cross, sourceSPL, env, usePeak);
       var rowClass = usePeak ? ' class="is-peak-row"' : '';
       html +=
         '<tr' + rowClass + '>' +
         '<td>' + row.label + '</td>' +
-        '<td>' + formatDistCell(bDown) + '</td>' +
-        '<td>' + formatDistCell(bUp) + '</td>' +
-        '<td>' + formatDistCell(bCross) + '</td>' +
-        '<td class="col-supp">' + formatDistCell(sDown) + '</td>' +
-        '<td class="col-supp">' + formatDistCell(sUp) + '</td>' +
-        '<td class="col-supp">' + formatDistCell(sCross) + '</td>' +
+        '<td>' + formatDistCell(dDown) + '</td>' +
+        '<td>' + formatDistCell(dUp) + '</td>' +
+        '<td>' + formatDistCell(dCross) + '</td>' +
         '</tr>';
     }
 
     oshaDistanceBody.innerHTML = html;
+  }
+
+  function setOshaView(mode) {
+    oshaView = mode === 'suppressed' ? 'suppressed' : 'bare';
+    var btnB = document.getElementById('btnOshaBare');
+    var btnS = document.getElementById('btnOshaSuppressed');
+    if (btnB) {
+      btnB.classList.toggle('is-active', oshaView === 'bare');
+      btnB.setAttribute('aria-pressed', oshaView === 'bare' ? 'true' : 'false');
+    }
+    if (btnS) {
+      btnS.classList.toggle('is-active', oshaView === 'suppressed');
+      btnS.setAttribute('aria-pressed', oshaView === 'suppressed' ? 'true' : 'false');
+    }
+    if (lastInputs) updateOshaDistanceTable(lastInputs);
+    else scheduleDistanceTableUpdate();
   }
 
   function scheduleDistanceTableUpdate() {
@@ -1643,6 +1656,11 @@
     var btnMapSupp = document.getElementById('btnMapSuppressed');
     if (btnMapBare) btnMapBare.addEventListener('click', function () { setMapSource('bare'); });
     if (btnMapSupp) btnMapSupp.addEventListener('click', function () { setMapSource('suppressed'); });
+
+    var btnOshaBare = document.getElementById('btnOshaBare');
+    var btnOshaSupp = document.getElementById('btnOshaSuppressed');
+    if (btnOshaBare) btnOshaBare.addEventListener('click', function () { setOshaView('bare'); });
+    if (btnOshaSupp) btnOshaSupp.addEventListener('click', function () { setOshaView('suppressed'); });
   }
 
   document.getElementById('btnGenerate').addEventListener('click', generateNoiseMap);

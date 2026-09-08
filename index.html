@@ -9,7 +9,10 @@
 </head>
 <body>
   <header class="site-header">
-    <h1><span>GSP</span> Sound Propagation Simulator</h1>
+    <div class="header-copy">
+      <h1><span>GSP</span> Sound Propagation Simulator</h1>
+      <p class="tagline">Pick a host &amp; suppressor · generate the map · compare OSHA distances</p>
+    </div>
     <p class="credit">Created by <strong>Jorge Guerra</strong></p>
   </header>
 
@@ -146,40 +149,6 @@
         </p>
       </div>
 
-      <div class="osha-distances" aria-label="Distance to OSHA levels">
-        <p class="legend-heading">Distance to OSHA levels — Bare | Suppressed</p>
-        <p class="osha-table-note" id="oshaTableNote">
-          Continuous field SPL along downwind / upwind / crosswind rays for both bare and suppressed source levels.
-          Map uses the selected Map: Bare / Map: Suppressed source. Engineering broadband estimate — not certified L<sub>peak</sub> / L<sub>Aeq</sub>.
-        </p>
-        <div class="osha-table-wrap">
-          <table class="osha-table osha-table-compare" id="oshaDistanceTable">
-            <thead>
-              <tr>
-                <th scope="col" rowspan="2">Level</th>
-                <th scope="colgroup" colspan="3">Bare</th>
-                <th scope="colgroup" colspan="3">Suppressed</th>
-              </tr>
-              <tr>
-                <th scope="col">Down</th>
-                <th scope="col">Up</th>
-                <th scope="col">Cross</th>
-                <th scope="col">Down</th>
-                <th scope="col">Up</th>
-                <th scope="col">Cross</th>
-              </tr>
-            </thead>
-            <tbody id="oshaDistanceBody">
-              <!-- filled by app.js -->
-            </tbody>
-          </table>
-        </div>
-        <p class="osha-peak-note">
-          <strong>140 dB peak</strong> row uses the peak-style pressure-sum estimate
-          vs OSHA 1910.95 impulsive/impact footnote (≤140 dB peak SPL) — not a lab L<sub>peak</sub>.
-        </p>
-      </div>
-
       <div class="inline-legend" aria-label="SPL color legend">
         <p class="legend-heading">SPL Color Legend</p>
         <div class="legend-row"><span class="swatch swatch-high"></span> High SPL (≈180 dB)</div>
@@ -200,6 +169,41 @@
       </div>
     </section>
   </main>
+
+  <section class="panel osha-panel" aria-label="Distance to OSHA levels">
+    <div class="osha-panel-head">
+      <div>
+        <h2 class="osha-panel-title">Distance to OSHA levels</h2>
+        <p class="osha-table-note" id="oshaTableNote">
+          Continuous field SPL along downwind / upwind / crosswind rays.
+          Switch Bare / Suppressed below — no side-scroll. Engineering broadband estimate — not certified L<sub>peak</sub> / L<sub>Aeq</sub>.
+        </p>
+      </div>
+      <div class="osha-view-toggle" role="group" aria-label="OSHA table source">
+        <button type="button" class="units-btn is-active" id="btnOshaBare" aria-pressed="true">Bare</button>
+        <button type="button" class="units-btn" id="btnOshaSuppressed" aria-pressed="false">Suppressed</button>
+      </div>
+    </div>
+    <div class="osha-table-wrap">
+      <table class="osha-table" id="oshaDistanceTable">
+        <thead>
+          <tr>
+            <th scope="col">Level</th>
+            <th scope="col">Downwind</th>
+            <th scope="col">Upwind</th>
+            <th scope="col">Crosswind</th>
+          </tr>
+        </thead>
+        <tbody id="oshaDistanceBody">
+          <!-- filled by app.js -->
+        </tbody>
+      </table>
+    </div>
+    <p class="osha-peak-note">
+      <strong>140 dB peak</strong> row uses the peak-style pressure-sum estimate
+      vs OSHA 1910.95 impulsive/impact footnote (≤140 dB peak SPL) — not a lab L<sub>peak</sub>.
+    </p>
+  </section>
 
   <footer class="site-footer">
     <p>
