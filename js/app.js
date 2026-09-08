@@ -6,8 +6,8 @@
 (function () {
   'use strict';
 
-  /** Cap cells per axis so a 1000 m domain does not freeze the browser. */
-  var MAX_CELLS_PER_AXIS = 180;
+  /** Cap cells/axis (browser perf). Higher = smoother rings; physics unchanged. */
+  var MAX_CELLS_PER_AXIS = 400;
 
   var M_PER_FT = 0.3048;
   var MPS_PER_MPH = 0.44704;
@@ -131,14 +131,19 @@
     }
     octx.putImageData(img, 0, 0);
 
-    // Fit canvas to container while keeping square aspect
+    // Fill map-wrap (square panel) — no 720px cap / letterboxing
     var wrap = canvas.parentElement;
-    var side = Math.min(wrap.clientWidth, wrap.clientHeight || wrap.clientWidth, 720);
-    if (side < 280) side = Math.max(280, wrap.clientWidth);
+    var side = Math.floor(Math.min(wrap.clientWidth || 0, wrap.clientHeight || 0));
+    if (side < 2) {
+      // Fallback before layout settles
+      side = Math.floor(wrap.clientWidth || canvas.clientWidth || 512);
+    }
+    if (side < 2) side = 512;
     canvas.width = side;
     canvas.height = side;
 
     ctx.imageSmoothingEnabled = true;
+    if (ctx.imageSmoothingQuality) ctx.imageSmoothingQuality = 'high';
     ctx.clearRect(0, 0, side, side);
     ctx.drawImage(off, 0, 0, side, side);
 
@@ -243,8 +248,11 @@
     var py = clientY - rect.top;
 
     var size = lastGrid.size;
-    var x = Math.round(px / canvas.width * size);
-    var y = Math.round(py / canvas.height * size);
+    // Map CSS pixels → grid via displayed size (not bitmap width) so CSS scaling stays accurate
+    var dispW = rect.width || canvas.width;
+    var dispH = rect.height || canvas.height;
+    var x = Math.floor(px / dispW * size);
+    var y = Math.floor(py / dispH * size);
 
     if (x < 0 || y < 0 || x >= size || y >= size) {
       cursorReadout.textContent = 'SPL: --- dB   Dist: --- ' + distUnit();
@@ -351,6 +359,10 @@
   });
 
   updateUnitLabels();
-  // Initial map
-  generateNoiseMap();
+  // Initial map after layout paints so square panel has non-zero size
+  requestAnimationFrame(function () {
+    requestAnimationFrame(function () {
+      generateNoiseMap();
+    });
+  });
 })();
