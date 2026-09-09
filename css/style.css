@@ -96,7 +96,7 @@ body {
   display: grid;
   grid-template-columns: minmax(300px, 360px) minmax(0, 1fr);
   gap: 0.85rem;
-  padding: 0.85rem 1.15rem 0.65rem;
+  padding: 0.85rem 1.15rem 1rem;
   max-width: 1520px;
   margin: 0 auto;
   min-height: 0;
@@ -360,13 +360,18 @@ body {
 }
 
 .site-footer {
-  max-width: 1400px;
-  margin: 0 auto;
-  padding: 0.75rem 0.85rem 1.25rem;
-  border-top: 1px solid var(--border);
+  max-width: none;
+  width: 100%;
+  margin: 0;
+  padding: 0.85rem 1rem 1rem;
+  border: 1px solid var(--border);
+  border-radius: var(--radius);
+  background: var(--bg-panel);
+  box-shadow: 0 10px 28px rgba(0,0,0,0.38);
   font-size: 0.72rem;
   color: var(--text-muted);
   line-height: 1.45;
+  flex: 0 0 auto;
 }
 
 .site-footer strong {
@@ -932,6 +937,14 @@ select {
     order: 0;
     margin: 0;
     padding: 0.85rem 0.9rem 1rem;
+  }
+
+  .site-footer {
+    order: 0;
+    margin: 0;
+    padding: 0.85rem 0.9rem 1rem;
+    overflow-wrap: anywhere;
+    word-break: break-word;
   }
 
   .controls {
