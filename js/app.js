@@ -228,14 +228,36 @@
   }
 
   function mapSPLToColor(spl) {
+    /* Smooth multi-stop ramp; anchors match legend ≈60 / ≈80 / ≈120 / ≈180 */
     var min = 60;
     var max = 180;
     var t = (spl - min) / (max - min);
     t = Math.max(0, Math.min(1, t));
-    var r = Math.round(255 * t);
-    var g = Math.round(255 * (1 - Math.abs(t - 0.5) * 2));
-    var b = Math.round(255 * (1 - t));
-    return [r, g, b];
+    var stops = [
+      { t: 0.00, c: [32, 64, 220] },   /* ~60 deep blue */
+      { t: 0.17, c: [20, 170, 210] },  /* ~80 cyan-teal */
+      { t: 0.50, c: [40, 210, 90] },   /* ~120 green */
+      { t: 0.75, c: [245, 210, 40] },  /* mid yellow */
+      { t: 1.00, c: [255, 48, 48] }    /* ~180 red */
+    ];
+    var a = stops[0];
+    var b = stops[stops.length - 1];
+    for (var i = 0; i < stops.length - 1; i++) {
+      if (t >= stops[i].t && t <= stops[i + 1].t) {
+        a = stops[i];
+        b = stops[i + 1];
+        break;
+      }
+    }
+    var span = b.t - a.t || 1;
+    var u = (t - a.t) / span;
+    /* smoothstep for softer banding */
+    u = u * u * (3 - 2 * u);
+    return [
+      Math.round(a.c[0] + (b.c[0] - a.c[0]) * u),
+      Math.round(a.c[1] + (b.c[1] - a.c[1]) * u),
+      Math.round(a.c[2] + (b.c[2] - a.c[2]) * u)
+    ];
   }
 
   function resolveGrid(maxDistance) {
@@ -429,8 +451,10 @@
 
       ctx.save();
       ctx.strokeStyle = line.color;
-      ctx.lineWidth = 1.5;
-      ctx.setLineDash([5, 4]);
+      ctx.lineWidth = 1.75;
+      ctx.lineJoin = 'round';
+      ctx.lineCap = 'round';
+      ctx.setLineDash([6, 5]);
       ctx.beginPath();
 
       // Fan NE targets: alternate slightly so neighboring level chips clear each other
@@ -526,10 +550,14 @@
     var nw = ctx.measureText(note).width + 10;
     var nh = 16;
     var noteBox = { x: noteX - nw, y: noteY - nh, w: nw, h: nh };
-    ctx.fillStyle = 'rgba(8, 10, 14, 0.9)';
-    roundRectPath(ctx, noteBox.x, noteBox.y, noteBox.w, noteBox.h, 3);
+    ctx.fillStyle = 'rgba(6, 8, 12, 0.94)';
+    roundRectPath(ctx, noteBox.x, noteBox.y, noteBox.w, noteBox.h, 4);
     ctx.fill();
-    ctx.fillStyle = 'rgba(255, 143, 163, 0.95)';
+    ctx.strokeStyle = 'rgba(255, 143, 163, 0.55)';
+    ctx.lineWidth = 1;
+    roundRectPath(ctx, noteBox.x, noteBox.y, noteBox.w, noteBox.h, 4);
+    ctx.stroke();
+    ctx.fillStyle = '#ffb3c1';
     ctx.fillText(note, noteX - 5, noteY - 3);
     occupied.push(noteBox);
     ctx.restore();
@@ -575,7 +603,22 @@
     ctx.imageSmoothingEnabled = true;
     if (ctx.imageSmoothingQuality) ctx.imageSmoothingQuality = 'high';
     ctx.clearRect(0, 0, side, side);
+    /* Soft heat field edges (contours/labels stay sharp on top) */
+    ctx.save();
+    if (typeof ctx.filter !== 'undefined') ctx.filter = 'blur(0.85px)';
     ctx.drawImage(off, 0, 0, side, side);
+    ctx.filter = 'none';
+    ctx.restore();
+    /* Subtle vignette / depth behind the field */
+    var vig = ctx.createRadialGradient(
+      side * 0.5, side * 0.5, side * 0.22,
+      side * 0.5, side * 0.5, side * 0.72
+    );
+    vig.addColorStop(0, 'rgba(0,0,0,0)');
+    vig.addColorStop(0.65, 'rgba(0,0,0,0.12)');
+    vig.addColorStop(1, 'rgba(0,0,0,0.42)');
+    ctx.fillStyle = vig;
+    ctx.fillRect(0, 0, side, side);
 
     // Distance rings — curves full circle; labels on SE ray (stagger vs OSHA NE chips)
     var centerPx = side / 2;
@@ -585,7 +628,7 @@
     var cosR = Math.cos(ringAng);
     var sinR = Math.sin(ringAng);
 
-    ctx.strokeStyle = 'rgba(255,255,255,0.55)';
+    ctx.strokeStyle = 'rgba(255,255,255,0.38)';
     ctx.lineWidth = 1;
     ctx.font = '600 11px "Segoe UI", system-ui, sans-serif';
 
