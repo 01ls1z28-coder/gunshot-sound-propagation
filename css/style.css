@@ -1,8 +1,9 @@
-/* Dark carbon-fiber professional theme (ForceMetric / SDC style) */
+/* Dark carbon-fiber professional theme (ForceMetric / SDC / VB family) */
 :root {
   --bg-deep: #0a0c0f;
   --bg-panel: #12151a;
   --bg-elevated: #1a1f27;
+  --panel: #12171f;
   --border: #2a3140;
   --accent: #c9a227;
   --accent-dim: #8a7018;
@@ -11,8 +12,35 @@
   --danger: #e85d5d;
   --input-bg: #0d1014;
   --radius: 12px;
+  --radius-sm: 9px;
   --font: "Segoe UI", system-ui, -apple-system, sans-serif;
   --space: 1rem;
+  /* Shared carbon weave (VB family) */
+  --carbon-fine: repeating-linear-gradient(
+      45deg,
+      rgba(255, 255, 255, 0.028) 0 1px,
+      transparent 1px 3px
+    ),
+    repeating-linear-gradient(
+      -45deg,
+      rgba(0, 0, 0, 0.28) 0 1px,
+      transparent 1px 3px
+    );
+  /* Phase 13/14 — classic brass / champagne chrome (exact VB token names) */
+  --brass: rgba(215, 196, 160, 0.42);
+  --brass-strong: rgba(240, 226, 196, 0.22);
+  --brass-inset: rgba(106, 87, 56, 0.35);
+  --brass-text: #e8d7b0;
+  --brass-face:
+    linear-gradient(145deg, rgba(240, 226, 196, 0.12), transparent 38%),
+    linear-gradient(165deg, rgba(255, 255, 255, 0.04) 0%, transparent 45%),
+    var(--carbon-fine),
+    var(--panel);
+  --brass-shadow:
+    inset 0 0 0 1px var(--brass-strong),
+    inset 0 0 0 3px var(--brass-inset),
+    inset 0 0 28px rgba(0, 0, 0, 0.35),
+    0 12px 36px rgba(0, 0, 0, 0.45);
 }
 
 *,
@@ -25,24 +53,36 @@ html, body {
   margin: 0;
   padding: 0;
   min-height: 100%;
-  background: var(--bg-deep);
   color: var(--text);
   font-family: var(--font);
-}
-
-/* Subtle carbon weave */
-body {
   background-color: var(--bg-deep);
   background-image:
-    linear-gradient(135deg, rgba(255,255,255,0.03) 25%, transparent 25%),
-    linear-gradient(225deg, rgba(255,255,255,0.03) 25%, transparent 25%),
-    linear-gradient(45deg, rgba(255,255,255,0.03) 25%, transparent 25%),
-    linear-gradient(315deg, rgba(255,255,255,0.03) 25%, transparent 25%),
-    radial-gradient(ellipse at top, #151a22 0%, var(--bg-deep) 70%);
-  background-size: 8px 8px, 8px 8px, 8px 8px, 8px 8px, 100% 100%;
-  background-position: 0 0, 4px 0, 4px -4px, 0 4px, 0 0;
+    radial-gradient(1100px 520px at 50% -8%, rgba(94, 200, 255, 0.06), transparent 58%),
+    radial-gradient(800px 480px at 92% 88%, rgba(201, 162, 39, 0.04), transparent 52%),
+    var(--carbon-fine),
+    linear-gradient(180deg, #0b0e13 0%, var(--bg-deep) 42%, #030405 100%);
+  background-attachment: fixed;
+  -webkit-font-smoothing: antialiased;
+  -moz-osx-font-smoothing: grayscale;
 }
 
+/* Soften legacy weave (kept as light overlay for GSPS identity) */
+body {
+  background-image:
+    linear-gradient(135deg, rgba(255,255,255,0.018) 25%, transparent 25%),
+    linear-gradient(225deg, rgba(255,255,255,0.018) 25%, transparent 25%),
+    linear-gradient(45deg, rgba(255,255,255,0.018) 25%, transparent 25%),
+    linear-gradient(315deg, rgba(255,255,255,0.018) 25%, transparent 25%),
+    radial-gradient(1100px 520px at 50% -8%, rgba(94, 200, 255, 0.06), transparent 58%),
+    radial-gradient(800px 480px at 92% 88%, rgba(201, 162, 39, 0.04), transparent 52%),
+    var(--carbon-fine),
+    linear-gradient(180deg, #0b0e13 0%, var(--bg-deep) 42%, #030405 100%);
+  background-size: 8px 8px, 8px 8px, 8px 8px, 8px 8px, auto, auto, auto, auto;
+  background-position: 0 0, 4px 0, 4px -4px, 0 4px, 0 0, 0 0, 0 0, 0 0;
+  background-attachment: fixed;
+}
+
+/* Header — VB/SDC brass bezel */
 .site-header {
   display: flex;
   flex-wrap: wrap;
@@ -50,9 +90,10 @@ body {
   justify-content: space-between;
   gap: 0.5rem 1.5rem;
   padding: 0.9rem 1.25rem;
-  border-bottom: 1px solid var(--border);
-  background: linear-gradient(180deg, rgba(26,31,39,0.95), rgba(10,12,15,0.85));
-  backdrop-filter: blur(6px);
+  background: var(--brass-face);
+  border-bottom: 1px solid var(--brass);
+  box-shadow: var(--brass-shadow);
+  backdrop-filter: blur(8px);
 }
 
 .header-copy {
@@ -64,8 +105,9 @@ body {
 .tagline {
   margin: 0;
   font-size: 0.78rem;
-  color: var(--text-muted);
+  color: var(--brass-text);
   letter-spacing: 0.01em;
+  opacity: 0.88;
 }
 
 .site-header h1 {
@@ -119,21 +161,57 @@ body {
   }
 }
 
+/* Panels — VB instrument cluster chrome + Phase 14 corner ticks */
 .panel {
-  background: var(--bg-panel);
-  border: 1px solid var(--border);
-  border-radius: var(--radius);
+  background: var(--brass-face);
+  border: 1px solid var(--brass);
+  border-radius: 12px;
   padding: 1rem 1.1rem;
-  box-shadow: 0 10px 28px rgba(0,0,0,0.38);
+  box-shadow: var(--brass-shadow);
+  position: relative;
+  overflow: hidden;
+}
+
+.panel::before {
+  content: "";
+  position: absolute;
+  top: 0;
+  left: 14px;
+  right: 14px;
+  height: 1px;
+  background: linear-gradient(90deg, transparent, rgba(240, 226, 196, 0.28), transparent);
+  pointer-events: none;
+  z-index: 1;
+}
+
+.panel::after {
+  content: "";
+  position: absolute;
+  inset: 5px;
+  border-radius: 8px;
+  pointer-events: none;
+  opacity: 0.42;
+  z-index: 1;
+  background:
+    linear-gradient(var(--brass-text), var(--brass-text)) top left / 11px 1px no-repeat,
+    linear-gradient(var(--brass-text), var(--brass-text)) top left / 1px 11px no-repeat,
+    linear-gradient(var(--brass-text), var(--brass-text)) top right / 11px 1px no-repeat,
+    linear-gradient(var(--brass-text), var(--brass-text)) top right / 1px 11px no-repeat,
+    linear-gradient(var(--brass-text), var(--brass-text)) bottom left / 11px 1px no-repeat,
+    linear-gradient(var(--brass-text), var(--brass-text)) bottom left / 1px 11px no-repeat,
+    linear-gradient(var(--brass-text), var(--brass-text)) bottom right / 11px 1px no-repeat,
+    linear-gradient(var(--brass-text), var(--brass-text)) bottom right / 1px 11px no-repeat;
 }
 
 .panel h2 {
   margin: 0 0 0.75rem;
   font-size: 0.95rem;
   text-align: center;
-  color: var(--accent);
+  color: var(--brass-text);
   letter-spacing: 0.04em;
   text-transform: uppercase;
+  position: relative;
+  z-index: 2;
 }
 
 /* Metric / Imperial segmented control */
@@ -142,10 +220,11 @@ body {
   grid-template-columns: 1fr 1fr;
   gap: 0;
   margin-bottom: 0.75rem;
-  border: 1px solid var(--border);
+  border: 1px solid var(--brass);
   border-radius: 4px;
   overflow: hidden;
-  background: var(--input-bg);
+  background: rgba(4, 6, 9, 0.55);
+  box-shadow: inset 0 0 0 1px var(--brass-inset);
 }
 
 .units-btn {
@@ -168,7 +247,7 @@ body {
 }
 
 .units-btn + .units-btn {
-  border-left: 1px solid var(--border);
+  border-left: 1px solid var(--brass);
 }
 
 .units-btn:hover {
@@ -177,9 +256,9 @@ body {
 }
 
 .units-btn.is-active {
-  background: linear-gradient(180deg, rgba(201, 162, 39, 0.28), rgba(138, 112, 24, 0.35));
-  color: var(--accent);
-  box-shadow: inset 0 0 0 1px rgba(201, 162, 39, 0.35);
+  background: linear-gradient(180deg, rgba(240, 226, 196, 0.22), rgba(106, 87, 56, 0.35));
+  color: var(--brass-text);
+  box-shadow: inset 0 0 0 1px var(--brass-strong);
 }
 
 .field {
@@ -189,26 +268,38 @@ body {
 .field label {
   display: block;
   font-size: 0.75rem;
-  color: var(--text-muted);
+  color: var(--brass-text);
   margin-bottom: 0.25rem;
+  opacity: 0.92;
 }
 
 .field input,
 .field select {
   width: 100%;
   padding: 0.4rem 0.5rem;
-  background: var(--input-bg);
-  border: 1px solid var(--border);
+  background:
+    linear-gradient(180deg, rgba(240, 226, 196, 0.04), transparent 40%),
+    var(--input-bg);
+  border: 1px solid var(--brass);
   border-radius: 4px;
   color: var(--text);
   font-size: 0.9rem;
+  box-shadow: inset 0 0 0 1px var(--brass-inset);
+  transition: border-color 0.15s ease, box-shadow 0.15s ease;
+}
+
+.field input:hover,
+.field select:hover {
+  border-color: rgba(240, 226, 196, 0.55);
 }
 
 .field input:focus,
 .field select:focus {
   outline: none;
-  border-color: var(--accent-dim);
-  box-shadow: 0 0 0 2px rgba(201, 162, 39, 0.25);
+  border-color: var(--brass-text);
+  box-shadow:
+    0 0 0 2px var(--bg-deep),
+    0 0 0 4px rgba(215, 196, 160, 0.35);
 }
 
 .section-label {
@@ -217,7 +308,9 @@ body {
   font-weight: 700;
   text-transform: uppercase;
   letter-spacing: 0.06em;
-  color: var(--accent);
+  color: var(--brass-text);
+  position: relative;
+  z-index: 2;
 }
 
 .row-2 {
@@ -241,8 +334,10 @@ body {
 
 .btn:focus-visible,
 .units-btn:focus-visible {
-  outline: 2px solid var(--accent);
-  outline-offset: 2px;
+  outline: none;
+  box-shadow:
+    0 0 0 2px var(--bg-deep),
+    0 0 0 4px rgba(215, 196, 160, 0.35);
 }
 
 .btn:hover:not(:disabled) {
@@ -257,6 +352,9 @@ body {
 .btn-primary {
   background: linear-gradient(180deg, #d4b03a, var(--accent-dim));
   color: #0a0c0f;
+  box-shadow: inset 0 0 0 1px rgba(106, 87, 56, 0.25);
+  position: relative;
+  z-index: 2;
 }
 
 .btn-primary:hover:not(:disabled) {
@@ -270,22 +368,28 @@ body {
 }
 
 .btn-secondary {
-  background: var(--bg-elevated);
+  background: rgba(4, 6, 9, 0.55);
   color: var(--text);
-  border: 1px solid var(--border);
+  border: 1px solid var(--brass);
+  box-shadow: inset 0 0 0 1px var(--brass-inset);
+  position: relative;
+  z-index: 2;
 }
 
 .btn-secondary:hover {
-  border-color: var(--accent-dim);
-  color: var(--accent);
+  border-color: rgba(240, 226, 196, 0.62);
+  color: var(--brass-text);
 }
 
 .inline-legend {
   margin-top: 0.65rem;
   padding: 0.6rem 0.7rem;
-  background: var(--bg-elevated);
-  border: 1px solid var(--border);
+  background: rgba(4, 6, 9, 0.55);
+  border: 1px solid var(--brass);
   border-radius: 4px;
+  box-shadow: inset 0 0 0 1px var(--brass-inset);
+  position: relative;
+  z-index: 2;
 }
 
 .legend-heading {
@@ -294,7 +398,7 @@ body {
   font-weight: 700;
   text-transform: uppercase;
   letter-spacing: 0.06em;
-  color: var(--accent);
+  color: var(--brass-text);
 }
 
 .legend-row {
@@ -362,12 +466,13 @@ body {
   max-width: min(15.5rem, calc(100% - 1.1rem));
   padding: 0.55rem 0.65rem 0.5rem;
   border-radius: 10px;
-  border: 1px solid rgba(255, 255, 255, 0.18);
+  border: 1px solid var(--brass);
   background: rgba(10, 12, 16, 0.55);
   backdrop-filter: blur(10px) saturate(1.2);
   -webkit-backdrop-filter: blur(10px) saturate(1.2);
   box-shadow:
     0 8px 24px rgba(0, 0, 0, 0.45),
+    inset 0 0 0 1px var(--brass-inset),
     inset 0 1px 0 rgba(255, 255, 255, 0.08);
   pointer-events: none;
 }
@@ -413,8 +518,10 @@ body {
   -webkit-backdrop-filter: blur(8px);
   padding: 0.4rem 0.65rem;
   border-radius: 8px;
-  border: 1px solid rgba(255, 255, 255, 0.2);
-  box-shadow: 0 6px 18px rgba(0, 0, 0, 0.4);
+  border: 1px solid var(--brass);
+  box-shadow:
+    0 6px 18px rgba(0, 0, 0, 0.4),
+    inset 0 0 0 1px var(--brass-inset);
   font-size: 0.85rem;
   font-weight: 600;
   color: #f5f7fa;
@@ -430,18 +537,20 @@ body {
   width: 100%;
   margin: 0;
   padding: 0.85rem 1rem 1rem;
-  border: 1px solid var(--border);
-  border-radius: var(--radius);
-  background: var(--bg-panel);
-  box-shadow: 0 10px 28px rgba(0,0,0,0.38);
+  border: 1px solid var(--brass);
+  border-radius: 12px;
+  background: var(--brass-face);
+  box-shadow: var(--brass-shadow);
   font-size: 0.72rem;
   color: var(--text-muted);
   line-height: 1.45;
   flex: 0 0 auto;
+  position: relative;
+  overflow: hidden;
 }
 
 .site-footer strong {
-  color: var(--text);
+  color: var(--brass-text);
 }
 
 
@@ -451,7 +560,7 @@ body {
 }
 
 .footer-osha strong {
-  color: var(--accent);
+  color: var(--brass-text);
   font-weight: 600;
 }
 
@@ -476,9 +585,12 @@ body {
 .export-panel {
   margin-top: 0.35rem;
   padding: 0.55rem 0.65rem;
-  background: var(--bg-elevated);
-  border: 1px solid var(--border);
+  background: rgba(4, 6, 9, 0.55);
+  border: 1px solid var(--brass);
   border-radius: 4px;
+  box-shadow: inset 0 0 0 1px var(--brass-inset);
+  position: relative;
+  z-index: 2;
 }
 
 .ab-slots {
@@ -494,9 +606,10 @@ body {
   align-items: flex-start;
   padding: 0.4rem 0.45rem;
   background: var(--input-bg);
-  border: 1px solid var(--border);
+  border: 1px solid var(--brass);
   border-radius: 4px;
   min-height: 2.6rem;
+  box-shadow: inset 0 0 0 1px var(--brass-inset);
 }
 
 .ab-slot-tag {
@@ -546,7 +659,7 @@ body {
 }
 
 .footer-phase4 strong {
-  color: var(--accent);
+  color: var(--brass-text);
   font-weight: 600;
 }
 
@@ -566,26 +679,33 @@ body {
   justify-content: space-between;
   gap: 0.85rem 1.25rem;
   margin-bottom: 0.65rem;
+  position: relative;
+  z-index: 2;
 }
 
 .osha-panel-title {
   margin: 0 0 0.3rem;
   font-size: 1rem;
   font-weight: 700;
-  color: var(--accent);
+  color: var(--brass-text);
   letter-spacing: 0.03em;
   text-transform: none;
   text-align: left;
+  position: relative;
+  z-index: 2;
 }
 
 .osha-view-toggle {
   display: grid;
   grid-template-columns: 1fr 1fr;
   min-width: 220px;
-  border: 1px solid var(--border);
+  border: 1px solid var(--brass);
   border-radius: 8px;
   overflow: hidden;
-  background: var(--input-bg);
+  background: rgba(4, 6, 9, 0.55);
+  box-shadow: inset 0 0 0 1px var(--brass-inset);
+  position: relative;
+  z-index: 2;
 }
 
 .osha-table-note,
@@ -602,15 +722,18 @@ body {
 }
 
 .osha-peak-note strong {
-  color: var(--accent);
+  color: var(--brass-text);
   font-weight: 600;
 }
 
 .osha-table-wrap {
   overflow-x: visible;
-  border: 1px solid var(--border);
+  border: 1px solid var(--brass);
   border-radius: 10px;
-  background: var(--bg-elevated);
+  background: rgba(4, 6, 9, 0.55);
+  box-shadow: inset 0 0 0 1px var(--brass-inset);
+  position: relative;
+  z-index: 2;
 }
 
 .osha-table {
@@ -638,12 +761,12 @@ body {
 }
 
 .osha-table thead th {
-  color: var(--accent);
+  color: var(--brass-text);
   font-weight: 700;
   text-transform: uppercase;
   letter-spacing: 0.04em;
   font-size: 0.7rem;
-  border-bottom: 1px solid var(--border);
+  border-bottom: 1px solid var(--brass);
   background: rgba(0, 0, 0, 0.18);
 }
 
@@ -687,7 +810,7 @@ body {
 }
 
 .footer-phase2 strong {
-  color: var(--accent);
+  color: var(--brass-text);
   font-weight: 600;
 }
 
@@ -717,10 +840,15 @@ body {
 .list-wrap {
   max-height: 11.5rem;
   overflow: auto;
-  border: 1px solid var(--border);
+  border: 1px solid var(--brass);
   border-radius: 4px;
-  background: var(--input-bg);
+  background: rgba(4, 6, 9, 0.55);
+  box-shadow:
+    inset 0 0 0 1px var(--brass-inset),
+    inset 0 1px 2px rgba(0, 0, 0, 0.35);
   -webkit-overflow-scrolling: touch;
+  position: relative;
+  z-index: 2;
 }
 
 .profile-list {
@@ -754,9 +882,9 @@ body {
 }
 
 .profile-list li.is-selected {
-  background: linear-gradient(180deg, rgba(201, 162, 39, 0.22), rgba(138, 112, 24, 0.28));
-  color: var(--accent);
-  box-shadow: inset 3px 0 0 var(--accent);
+  background: linear-gradient(180deg, rgba(240, 226, 196, 0.16), rgba(106, 87, 56, 0.28));
+  color: var(--brass-text);
+  box-shadow: inset 3px 0 0 var(--brass-text);
 }
 
 .profile-list .spl-tag {
@@ -764,7 +892,7 @@ body {
   min-width: 3.2rem;
   font-variant-numeric: tabular-nums;
   font-weight: 700;
-  color: var(--accent);
+  color: var(--brass-text);
 }
 
 .map-source-toggle {
@@ -772,22 +900,28 @@ body {
   grid-template-columns: 1fr 1fr;
   gap: 0;
   margin: 0.55rem 0 0.65rem;
-  border: 1px solid var(--border);
+  border: 1px solid var(--brass);
   border-radius: 4px;
   overflow: hidden;
-  background: var(--input-bg);
+  background: rgba(4, 6, 9, 0.55);
+  box-shadow: inset 0 0 0 1px var(--brass-inset);
+  position: relative;
+  z-index: 2;
 }
 
 .map-source-toggle .units-btn + .units-btn {
-  border-left: 1px solid var(--border);
+  border-left: 1px solid var(--brass);
 }
 
 .compare-summary {
   margin-bottom: 0.65rem;
   padding: 0.55rem 0.65rem;
-  background: var(--bg-elevated);
-  border: 1px solid var(--border);
+  background: rgba(4, 6, 9, 0.55);
+  border: 1px solid var(--brass);
   border-radius: 4px;
+  box-shadow: inset 0 0 0 1px var(--brass-inset);
+  position: relative;
+  z-index: 2;
 }
 
 .compare-grid {
@@ -832,7 +966,7 @@ body {
 }
 
 .footer-phase3 strong {
-  color: var(--accent);
+  color: var(--brass-text);
   font-weight: 600;
 }
 
@@ -857,6 +991,8 @@ body {
   display: flex;
   flex-direction: column;
   gap: 0.15rem;
+  position: relative;
+  z-index: 2;
 }
 
 .controls .section-label {
@@ -908,12 +1044,15 @@ body {
   cursor: pointer;
   font-size: 0.85rem;
   font-weight: 700;
-  color: var(--accent);
+  color: var(--brass-text);
   letter-spacing: 0.02em;
   padding: 0.75rem 0.85rem;
-  border: 1px solid var(--border);
+  border: 1px solid var(--brass);
   border-radius: 10px;
-  background: var(--bg-elevated);
+  background: rgba(4, 6, 9, 0.55);
+  box-shadow: inset 0 0 0 1px var(--brass-inset);
+  position: relative;
+  z-index: 2;
 }
 
 .tools-drawer-summary::-webkit-details-marker {

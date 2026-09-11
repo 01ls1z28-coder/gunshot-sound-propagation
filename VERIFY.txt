@@ -1,0 +1,39 @@
+Gunshot Sound Propagation Simulator — verification notes
+========================================================
+
+FAMILY BRASS — GSPS brass chrome (2026-09-11 CT)
+------------------------------------------------
+CSS/theme only. Ports VelocityBench Phase 13/14 `--brass*` tokens so GSPS
+header/panels/inputs read as the same instrument-cluster family as VB + hub
+(tip 7af40e4) + SDC (tip 4e6864b).
+
+Applied (exact VB token names):
+  --brass, --brass-strong, --brass-inset, --brass-text,
+  --brass-face, --brass-shadow  (+ --carbon-fine / --panel for face stack)
+
+Chrome surfaces:
+  - .site-header: brass face + bottom bezel + shadow
+  - .panel (controls / map / OSHA): brass face/border/shadow, top highlight
+    (::before), Phase 14 corner ticks (::after)
+  - .map-panel: keeps black map face; inherits brass frame + ticks
+  - .site-footer: brass face/border/shadow (not a .panel)
+  - Inputs/selects + list-wrap / units & map-source toggles / compare /
+    A-B & export insets: brass bezel + inset
+  - Labels, section titles, OSHA table header, footer strongs: brass-text
+  - Glass legend chip + readout: light brass border (glass readability kept)
+  - GSP mark span + Jorge Guerra credit strong stay gold accent (identity)
+  - Generate Noise Map CTA stays high-contrast gold gradient
+
+Intentional skips:
+  - SPL heat ramp / legend swatch colors — functional map readability
+  - OSHA peak-row pink / disclaimer danger red — semantic colors
+  - A/B slot-tag gold chips — high-contrast slot identity
+  - Propagation math, profiles data, OSHA thresholds, sources copy
+  - No HTML hooks required; no analytics; no JS/data changes
+
+Verify:
+  1. Open index.html locally
+  2. Side-by-side with VB tool cards / hub / SDC — champagne bezel matches
+  3. Corner ticks on panels; inputs readable; Generate CTA still high-contrast
+  4. Map glass legend + readout remain readable over heat map
+  5. Mobile: stacked panels, no horizontal overflow from ticks
