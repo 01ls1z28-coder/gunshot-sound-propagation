@@ -1,3 +1,20 @@
+SEO / indexing (2026-09-18 CT)
+==============================
+Branch: review/gsps-seo
+Base: live main @ hub-chrome tip
+
+Static: unique title + richer description + OG/Twitter + canonical
+  https://01ls1z28-coder.github.io/gunshot-sound-propagation/
+robots.txt Allow + sitemap.xml. Existing <h1> kept. Docs/disclaimer/OSHA unchanged.
+No JS/map math/deploy.
+
+VERIFY
+  1. View-source: title/description/canonical/OG/Twitter; one H1
+  2. /robots.txt + /sitemap.xml after Pages publish
+  3. Map/OSHA UI unchanged
+
+Intentional skips: deploy; tracking; profile rebake.
+
 Gunshot Sound Propagation Simulator — verification notes
 ========================================================
 

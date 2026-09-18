@@ -1,0 +1,4 @@
+User-agent: *
+Allow: /
+
+Sitemap: https://01ls1z28-coder.github.io/gunshot-sound-propagation/sitemap.xml
