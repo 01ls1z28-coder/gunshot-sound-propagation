@@ -37,3 +37,5 @@ Verify:
   3. Corner ticks on panels; inputs readable; Generate CTA still high-contrast
   4. Map glass legend + readout remain readable over heat map
   5. Mobile: stacked panels, no horizontal overflow from ticks
+
+Hub chrome 2026-09-18 CT: css/vb-chrome.css + nav (Hub=velocitybench.com).

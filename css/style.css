@@ -1283,3 +1283,9 @@ select {
     margin-top: 0.85rem;
   }
 }
+
+body > .vb-chrome {
+  max-width: 1200px;
+  margin: 0.55rem auto 0.35rem;
+  box-sizing: border-box;
+}
