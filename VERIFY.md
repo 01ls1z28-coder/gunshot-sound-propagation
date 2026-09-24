@@ -34,12 +34,11 @@ Expect `B_on > B` and `P_on > P` at mid-field distances when ON; exact equality 
 2. Generate map → status includes `shock=OFF`. Map/OSHA look like live main.
 3. Check the box → Generate → status `shock=ON`; map should brighten slightly / OSHA distances may shrink; **no console errors**.
 4. Uncheck → Generate → back to prior SPL / distances.
-5. Credits in header/footer remain **Jorge Guerra only** (no builder-bot names).
+5. Credits in header/footer remain **Jorge Guerra only**.
 6. Static only: no tracking, no secrets, no network fetch for this tip.
 
 ## Intentional skips
 
-- No Merovingian / Pages deploy from this tip.
-- `main` not pushed.
+- No Pages deploy from this tip; `main` not pushed.
 - No caliber / suppressor rebake; no hub or PowerCurve changes.
 - No new physics model beyond wiring the existing path.

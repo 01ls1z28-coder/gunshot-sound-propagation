@@ -2,11 +2,11 @@
 
 Static GitHub Pages port of Jorge Guerra’s WPF **GunshotSoundPropagationSimulator**.
 
-**Created by Jorge Guerra.** Static rebuild by Sati.
+**Created by Jorge Guerra.**
 
 ## Live / Pages
 
-Enable **Settings → Pages → Deploy from branch `main` / root** (or the feature branch Seraph clears). No build step — open `index.html` or serve the repo root.
+Enable **Settings → Pages → Deploy from branch `main` / root** (or a review branch selected in Pages settings). No build step — open `index.html` or serve the repo root.
 
 ## Controls (same as desktop MainWindow)
 
