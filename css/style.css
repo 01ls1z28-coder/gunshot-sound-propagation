@@ -823,6 +823,50 @@ body {
   grid-template-columns: minmax(300px, 360px) minmax(0, 1fr);
 }
 
+/* Supersonic shockwave toggle (engineering estimate) */
+.field-checkbox {
+  margin-top: 0.35rem;
+  padding: 0.55rem 0.65rem;
+  background: rgba(4, 6, 9, 0.45);
+  border: 1px solid var(--brass);
+  border-radius: 4px;
+  box-shadow: inset 0 0 0 1px var(--brass-inset);
+}
+
+.checkbox-label {
+  display: flex;
+  align-items: flex-start;
+  gap: 0.5rem;
+  font-size: 0.78rem;
+  font-weight: 600;
+  color: var(--brass-text);
+  text-transform: none;
+  letter-spacing: 0.01em;
+  cursor: pointer;
+  line-height: 1.35;
+}
+
+.checkbox-label input[type="checkbox"] {
+  margin: 0.15rem 0 0;
+  width: 1rem;
+  height: 1rem;
+  flex-shrink: 0;
+  accent-color: var(--brass-strong, #c9a227);
+  cursor: pointer;
+}
+
+.disclaimer-inline {
+  margin: 0.4rem 0 0;
+  color: var(--danger);
+  opacity: 0.95;
+  font-size: 0.65rem;
+  line-height: 1.4;
+}
+
+.disclaimer-inline code {
+  font-size: 0.62rem;
+}
+
 .field-note,
 .hint {
   margin: 0.25rem 0 0;

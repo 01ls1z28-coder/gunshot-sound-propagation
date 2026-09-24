@@ -43,7 +43,7 @@ Documented in the UI status line under the buttons (`js/app.js`).
 - Terrain loss (Open Field / Forest / Urban / Indoor)
 - Ground reflection (source height 1.5 m, R = 0.6)
 - Wind factor
-- Supersonic shockwave path present (desktop UI passes `isSupersonic = false`)
+- Supersonic shockwave path present; UI checkbox **Include supersonic shockwave path** defaults **OFF** (`isSupersonic = false`, prior maps). When ON, wires existing shock merge — engineering estimate, not hearing-safety / not OSHA certified.
 
 Phase 3 wires baked gun / suppressor profiles from the Sound Distance Calculator
 `suppressors-data.js` bake (Thunder Beast Arms Silencer Summit / SDC credits) in

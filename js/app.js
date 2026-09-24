@@ -270,7 +270,7 @@
     return { gridSize: gridSize, cellSize_m: cs, domainM: domainM };
   }
 
-  function generateGrid(startingSPL, tempC, humidityPct, terrain, windSpeed, windDirRad, maxDistance) {
+  function generateGrid(startingSPL, tempC, humidityPct, terrain, windSpeed, windDirRad, maxDistance, isSupersonic) {
     var res = resolveGrid(maxDistance);
     cellSize_m = res.cellSize_m;
     lastMaxDistance = maxDistance;
@@ -279,6 +279,7 @@
     var gridSize = res.gridSize;
     var grid = new Float64Array(gridSize * gridSize);
     var center = gridSize / 2;
+    var superFlag = !!isSupersonic;
 
     for (var x = 0; x < gridSize; x++) {
       for (var y = 0; y < gridSize; y++) {
@@ -289,7 +290,7 @@
         var angleRad = Math.atan2(dy, dx);
         var spl = Acoustics.Propagate(
           startingSPL, distance_m, tempC, humidityPct,
-          terrain, false, windSpeed, windDirRad, angleRad
+          terrain, superFlag, windSpeed, windDirRad, angleRad
         );
         grid[x * gridSize + y] = spl;
       }
@@ -300,11 +301,13 @@
         ? cellSize_m.toFixed(2) + ' m'
         : (cellSize_m / M_PER_FT).toFixed(2) + ' ft';
       var srcTag = mapSource === 'suppressed' ? 'map=suppressed' : 'map=bare';
+      var shockTag = superFlag ? 'shock=ON' : 'shock=OFF';
       gridInfo.textContent =
         'Grid: ' + gridSize + '×' + gridSize +
         ' · cell ≈ ' + cellLabel +
         ' · cap ' + MAX_CELLS_PER_AXIS + ' / axis' +
         ' · ' + srcTag +
+        ' · ' + shockTag +
         ' · map = engineering broadband (not certified Lpeak/LAeq)';
     }
 
@@ -734,6 +737,8 @@
     var terrain = document.getElementById('terrain').value || 'Open Field';
     var windRaw = parseOrDefault(document.getElementById('windSpeed').value, 0.0);
     var windDirDeg = parseOrDefault(document.getElementById('windDir').value, 0.0);
+    var isSupersonicEl = document.getElementById('isSupersonic');
+    var isSupersonic = !!(isSupersonicEl && isSupersonicEl.checked);
 
     var maxDistance_m;
     var tempC;
@@ -758,7 +763,8 @@
       humidityPct: humidityPct,
       terrain: terrain,
       windSpeed_mps: windSpeed_mps,
-      windDirRad: windDirDeg * Math.PI / 180.0
+      windDirRad: windDirDeg * Math.PI / 180.0,
+      isSupersonic: isSupersonic
     };
   }
 
@@ -785,7 +791,8 @@
       humidityPct: env.humidityPct,
       terrain: env.terrain,
       windSpeed_mps: env.windSpeed_mps,
-      windDirRad: env.windDirRad
+      windDirRad: env.windDirRad,
+      isSupersonic: !!env.isSupersonic
     };
   }
 
@@ -801,7 +808,7 @@
         env.tempC,
         env.humidityPct,
         env.terrain,
-        false,
+        !!env.isSupersonic,
         env.windSpeed_mps,
         env.windDirRad,
         rayAngleRad
@@ -814,7 +821,7 @@
     function peakAt(d) {
       return Acoustics.PropagateWithPeak(
         muzzleSPL, d, env.tempC, env.humidityPct, env.terrain,
-        false, env.windSpeed_mps, env.windDirRad, rayAngleRad
+        !!env.isSupersonic, env.windSpeed_mps, env.windDirRad, rayAngleRad
       ).peak;
     }
 
@@ -960,6 +967,7 @@
         terrain: document.getElementById('terrain').value,
         windSpeed: document.getElementById('windSpeed').value,
         windDir: document.getElementById('windDir').value,
+        isSupersonic: !!(document.getElementById('isSupersonic') || {}).checked,
         caliberFilter: (document.getElementById('caliberFilter') || {}).value || '',
         suppressorSearch: (document.getElementById('suppressorSearch') || {}).value || ''
       },
@@ -977,7 +985,8 @@
         terrain: env.terrain,
         windSpeed_mps: env.windSpeed_mps,
         windDirRad: env.windDirRad,
-        windDirDeg: windDeg
+        windDirDeg: windDeg,
+        isSupersonic: !!env.isSupersonic
       },
       bareName: bare ? bare.name : 'Custom / manual',
       suppressorName: sup
@@ -1058,6 +1067,10 @@
     setVal('terrain', f.terrain);
     setVal('windSpeed', f.windSpeed);
     setVal('windDir', f.windDir);
+    var superEl = document.getElementById('isSupersonic');
+    if (superEl) {
+      superEl.checked = !!(f.isSupersonic || (snap.env && snap.env.isSupersonic));
+    }
     setVal('caliberFilter', f.caliberFilter);
     setVal('suppressorSearch', f.suppressorSearch);
 
@@ -1194,7 +1207,7 @@
           if (muzzle == null || !isFinite(muzzle)) return null;
           return Acoustics.Propagate(
             muzzle, dist, env.tempC, env.humidityPct, env.terrain,
-            false, env.windSpeed_mps, env.windDirRad, ang
+            !!env.isSupersonic, env.windSpeed_mps, env.windDirRad, ang
           );
         }
         var bareSpl = splAt(bareSPL);
@@ -1348,7 +1361,7 @@
     setTimeout(function () {
       lastGrid = generateGrid(
         inp.startingSPL, inp.tempC, inp.humidityPct, inp.terrain,
-        inp.windSpeed_mps, inp.windDirRad, inp.maxDistance_m
+        inp.windSpeed_mps, inp.windDirRad, inp.maxDistance_m, inp.isSupersonic
       );
       renderGrid(lastGrid, inp.maxDistance_m);
       updateOshaDistanceTable(inp);
@@ -1391,7 +1404,7 @@
       lastInputs.tempC,
       lastInputs.humidityPct,
       lastInputs.terrain,
-      false,
+      !!lastInputs.isSupersonic,
       lastInputs.windSpeed_mps,
       lastInputs.windDirRad,
       angleRad

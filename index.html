@@ -127,6 +127,19 @@
         </select>
       </div>
 
+      <div class="field field-checkbox" id="supersonicField">
+        <label class="checkbox-label" for="isSupersonic">
+          <input id="isSupersonic" type="checkbox" />
+          <span>Include supersonic shockwave path</span>
+        </label>
+        <p class="field-note disclaimer-inline" id="supersonicDisclaimer">
+          Engineering estimate only — not hearing-safety guidance and
+          <strong>not OSHA certified</strong>. Default OFF matches prior maps / SPL behavior.
+          When ON, wires the existing shockwave merge (<code>isSupersonic=true</code>);
+          no new physics and no rebaked profiles.
+        </p>
+      </div>
+
       <p class="section-label">Wind</p>
 
       <div class="row-2">
